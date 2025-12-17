@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Node
+node_modules/
+
+# Environment
+.env
+.venv
+env/
+venv/
+
+# Project specific logs/temp
+debug_output*.txt
+*_log.txt
+*_log_*.txt
+git_check.py
+git_status_log.txt
+git_check_log.txt
+backend/serviceAccountKey.json
