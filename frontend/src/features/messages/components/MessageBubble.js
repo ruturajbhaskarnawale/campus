@@ -40,6 +40,23 @@ export default function MessageBubble({
     );
   };
 
+  const renderReply = () => {
+    if (!message.replyTo) return null;
+    const reply = message.replyTo;
+    // Handle legacy string IDs if any, though we prefer object
+    if (typeof reply !== 'object') return null;
+
+    return (
+      <View style={[styles.replyContainer, isOwnMessage ? styles.replyContainerOwn : styles.replyContainerOther]}>
+         <View style={[styles.replyBar, { backgroundColor: isOwnMessage ? 'rgba(255,255,255,0.6)' : COLORS.primary }]} />
+         <View style={{flex:1}}>
+            <Text style={[styles.replyName, isOwnMessage ? styles.textWhite : {color: COLORS.primary}]}>{reply.sender}</Text>
+            <Text style={[styles.replyText, isOwnMessage ? styles.textWhiteVeryLight : styles.textGrey]} numberOfLines={1}>{reply.text}</Text>
+         </View>
+      </View>
+    );
+  };
+
   const renderContent = () => {
     // 1. Image
     if (message.type === 'image') {
@@ -132,6 +149,7 @@ export default function MessageBubble({
               end={{ x: 1, y: 1 }}
               style={[styles.bubble, styles.bubbleRight]}
             >
+              {renderReply()}
               {renderContent()}
               <View style={styles.metaContainer}>
                 <Text style={[styles.timestamp, styles.textWhiteVeryLight]}>{formatTime(message.timestamp)}</Text>
@@ -146,6 +164,7 @@ export default function MessageBubble({
             </LinearGradient>
           ) : (
             <View style={[styles.bubble, styles.bubbleLeft]}>
+              {renderReply()}
               {renderContent()}
               <View style={styles.metaContainer}>
                 <Text style={[styles.timestamp, styles.textGrey]}>{formatTime(message.timestamp)}</Text>
@@ -269,6 +288,33 @@ const styles = StyleSheet.create({
     color: '#FFF',
   },
   
+  // Reply Styles
+  replyContainer: {
+    marginBottom: 8,
+    flexDirection: 'row',
+    padding: 6,
+    borderRadius: 8,
+  },
+  replyContainerOwn: {
+    backgroundColor: 'rgba(0,0,0,0.1)',
+  },
+  replyContainerOther: {
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  replyBar: {
+    width: 3,
+    borderRadius: 2,
+    marginRight: 8,
+  },
+  replyName: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  replyText: {
+    fontSize: 11,
+  },
+
   // Link Preview
   linkPreview: {
     marginTop: 8,

@@ -488,7 +488,7 @@ def edit_message():
         return jsonify({"error": str(e)}), 500
 
 
-@messages_bp.route('/delete', methods=['POST  '])
+@messages_bp.route('/delete', methods=['POST'])
 def delete_message():
     """Delete a message (soft delete)"""
     try:

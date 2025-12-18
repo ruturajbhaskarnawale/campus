@@ -42,10 +42,22 @@ export default function ProfileScreen({ navigation, route }) {
 
   // Animations
   const scrollY = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     init();
+    // Pulse animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.1, duration: 1000, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true })
+      ])
+    ).start();
   }, [route?.params?.userId]);
+
+  const [viewMode, setViewMode] = useState('public');
+  const [themeColor, setThemeColor] = useState(COLORS.primary);
+  const [completion, setCompletion] = useState(0);
 
   const init = async () => {
     try {
@@ -77,13 +89,16 @@ export default function ProfileScreen({ navigation, route }) {
     }
   };
 
+  // ... (existing effects)
+
   const fetchEnhancedProfile = async (uid) => {
     try {
       const res = await client.get(`/profile/${uid}/enhanced`);
       setProfile(res.data);
+      if (res.data.theme_color) setThemeColor(res.data.theme_color);
+      if (res.data.completion_percent) setCompletion(res.data.completion_percent);
     } catch (e) {
-      console.warn("Enhanced profile failed, fallback may be needed", e);
-      // Fallback or error handling
+      console.warn("Enhanced profile failed", e);
     }
   };
 
@@ -91,21 +106,21 @@ export default function ProfileScreen({ navigation, route }) {
     try {
       const res = await client.get(`/profile/${uid}/activity`);
       setActivity(res.data || []);
-    } catch (e) { console.warn(e); }
+    } catch (e) { console.warn('Activity fetch failed', e); setActivity([]); }
   };
 
   const fetchContributions = async (uid) => {
     try {
        const res = await client.get(`/profile/${uid}/contributions`);
        setContributions(res.data || {});
-    } catch (e) { console.warn(e); }
+    } catch (e) { console.warn('Contributions fetch failed', e); setContributions({}); }
   };
 
   const fetchSkills = async (uid) => {
     try {
       const res = await client.get(`/profile/${uid}/skills`);
       setSkills(res.data || []);
-    } catch (e) { console.warn(e); }
+    } catch (e) { console.warn('Skills fetch failed', e); setSkills([]); }
   };
 
   const onRefresh = () => {
@@ -121,6 +136,11 @@ export default function ProfileScreen({ navigation, route }) {
     } catch (e) {
       Alert.alert("Error");
     }
+  };
+
+  // Actions
+  const showQRCode = () => {
+      Alert.alert('Scan QR', 'Share this code to connect instantly.\n[ |||| || ||| ]');
   };
 
   // Renderers
@@ -153,25 +173,6 @@ export default function ProfileScreen({ navigation, route }) {
     );
   };
 
-  const renderOverview = () => (
-    <View style={styles.tabContent}>
-      <ProfileStats 
-        stats={profile?.stats || {}} 
-        level={profile?.level || 1}
-        xp={profile?.current_xp || 0}
-        nextXp={profile?.next_level_xp || 1000}
-      />
-      
-      <BadgesList badges={profile?.badges} />
-      
-      <ContributionGraph data={contributions} />
-      
-      <SkillCard skills={skills} onEndorse={handleEndorse} />
-      
-      {/* Featured Project Carousel could go here */}
-    </View>
-  );
-
   const renderActivity = () => (
     <View style={styles.tabContent}>
        {activity.length === 0 ? (
@@ -195,14 +196,135 @@ export default function ProfileScreen({ navigation, route }) {
        )}
     </View>
   );
+  const renderCompletionMeter = () => {
+     if (!isOwnProfile || completion >= 100) return null;
+     return (
+         <View style={styles.completionContainer}>
+             <View style={styles.completionHeader}>
+                 <Text style={styles.completionTitle}>Profile Strength: {completion}%</Text>
+                 <Text style={styles.completionSub}>Add a bio to reach 100%</Text>
+             </View>
+             <View style={styles.completionTrack}>
+                 <View style={[styles.completionFill, { width: `${completion}%`, backgroundColor: themeColor }]} />
+             </View>
+         </View>
+     );
+  };
+
+  const renderPortfolioGrid = () => {
+      // Mock projects for masonry feeling
+      const projects = [
+          {id: 1, title: 'AI Chat', image: 'https://via.placeholder.com/300x400', height: 200},
+          {id: 2, title: 'Crypto Tracker', image: 'https://via.placeholder.com/300x200', height: 150},
+          {id: 3, title: 'Social Graph', image: 'https://via.placeholder.com/300x300', height: 180},
+          {id: 4, title: 'Food Delivery', image: 'https://via.placeholder.com/300x250', height: 160},
+      ];
+
+      return (
+          <View style={styles.portfolioGrid}>
+              <View style={styles.portfolioColumn}>
+                  {projects.filter((_, i) => i % 2 === 0).map(p => (
+                      <TouchableOpacity key={p.id} style={[styles.portfolioItem, {height: p.height}]}>
+                          <Image source={{uri: p.image}} style={styles.portfolioImage} />
+                          <View style={styles.portfolioOverlay}>
+                              <Text style={styles.portfolioTitle}>{p.title}</Text>
+                          </View>
+                      </TouchableOpacity>
+                  ))}
+              </View>
+              <View style={styles.portfolioColumn}>
+                   {projects.filter((_, i) => i % 2 !== 0).map(p => (
+                      <TouchableOpacity key={p.id} style={[styles.portfolioItem, {height: p.height}]}>
+                          <Image source={{uri: p.image}} style={styles.portfolioImage} />
+                          <View style={styles.portfolioOverlay}>
+                              <Text style={styles.portfolioTitle}>{p.title}</Text>
+                          </View>
+                      </TouchableOpacity>
+                  ))}
+              </View>
+          </View>
+      );
+  };
+
+  const renderAbout = () => (
+      <View style={styles.tabContent}>
+          <View style={styles.sectionCard}>
+              <Text style={styles.sectionTitle}>About</Text>
+              <Text style={styles.sectionBody}>
+                  {profile?.bio || "No bio available."}
+              </Text>
+          </View>
+
+          <View style={styles.sectionCard}>
+              <Text style={styles.sectionTitle}>Education</Text>
+              <View style={styles.timelineItem}>
+                  <View style={styles.timelineDot} />
+                  <View style={styles.timelineContent}>
+                      <Text style={styles.timelineTitle}>University of Technology</Text>
+                      <Text style={styles.timelineSubtitle}>B.S. Computer Science • 2022 - 2026</Text>
+                  </View>
+              </View>
+          </View>
+
+          <View style={styles.sectionCard}>
+              <Text style={styles.sectionTitle}>Experience</Text>
+              <View style={styles.timelineItem}>
+                  <View style={styles.timelineDot} />
+                  <View style={styles.timelineContent}>
+                      <Text style={styles.timelineTitle}>Frontend Intern</Text>
+                      <Text style={styles.timelineSubtitle}>TechCorp Inc. • Summer 2024</Text>
+                      <Text style={styles.timelineBody}>Built responsive dashboards using React Native.</Text>
+                  </View>
+              </View>
+          </View>
+          
+          <TouchableOpacity style={styles.recommendationBtn}>
+              <Ionicons name="create-outline" size={20} color={COLORS.primary} />
+              <Text style={styles.recommendationText}>Write a Recommendation</Text>
+          </TouchableOpacity>
+      </View>
+  );
+
+  const renderOverview = () => (
+    <View style={styles.tabContent}>
+      {renderCompletionMeter()}
+      
+      {!isOwnProfile && (
+          <View style={styles.mutualContainer}>
+              <View style={styles.stackedAvatars}>
+                  <View style={[styles.miniAvatar, {backgroundColor: 'red'}]} />
+                  <View style={[styles.miniAvatar, {backgroundColor: 'blue', marginLeft: -10}]} />
+              </View>
+              <Text style={styles.mutualText}>You and Alice both know Bob and 2 others.</Text>
+          </View>
+      )}
+
+      <ProfileStats 
+        stats={profile?.stats || {}} 
+        level={profile?.level || 1}
+        xp={profile?.current_xp || 0}
+        nextXp={profile?.next_level_xp || 1000}
+        color={themeColor}
+      />
+      
+      <BadgesList badges={profile?.badges} />
+      
+      <ContributionGraph data={contributions} color={themeColor} />
+      
+      <SkillCard skills={skills} onEndorse={handleEndorse} color={themeColor} />
+    </View>
+  );
+
+  // ... (keep renderActivity)
 
   if (loading && !profile) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+        <ActivityIndicator size="large" color={themeColor || COLORS.primary} />
       </View>
     );
   }
+
 
   // Parallax Config
   const HEADER_MAX_HEIGHT = 180;
@@ -255,6 +377,7 @@ export default function ProfileScreen({ navigation, route }) {
       >
         <View style={styles.profileHeader}>
            <View style={styles.avatarWrapper}>
+              <Animated.View style={[styles.avatarPulse, { transform: [{ scale: pulseAnim }], borderColor: themeColor }]} />
               <Image 
                 source={{ uri: profile?.avatar_url || 'https://via.placeholder.com/150' }}
                 style={styles.avatar} 
@@ -269,9 +392,20 @@ export default function ProfileScreen({ navigation, route }) {
               {renderSocials()}
               
               {!isOwnProfile && (
-                <TouchableOpacity style={styles.followBtn}>
-                  <Text style={styles.followText}>Follow</Text>
-                </TouchableOpacity>
+                <View style={{flexDirection: 'row', gap: 10}}>
+                  <TouchableOpacity style={styles.followBtn}>
+                    <Text style={styles.followText}>Follow</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.iconBtn} onPress={showQRCode}>
+                     <Ionicons name="qr-code-outline" size={20} color={COLORS.text.primary} />
+                  </TouchableOpacity>
+                </View>
+              )}
+               {isOwnProfile && (
+                  <TouchableOpacity style={styles.qrBtn} onPress={showQRCode}>
+                      <Ionicons name="qr-code" size={20} color={COLORS.primary} />
+                      <Text style={styles.qrText}>Share Profile</Text>
+                  </TouchableOpacity>
               )}
            </View>
         </View>
@@ -294,18 +428,8 @@ export default function ProfileScreen({ navigation, route }) {
           <View style={styles.contentContainer}>
              {activeTab === 'Overview' && renderOverview()}
              {activeTab === 'Activity' && renderActivity()}
-             {activeTab === 'Projects' && (
-               <View style={styles.emptyTab}>
-                 <Ionicons name="code-slash" size={48} color={COLORS.text.tertiary} />
-                 <Text style={styles.emptyText}>Projects Grid Coming Soon</Text>
-               </View>
-             )}
-             {activeTab === 'About' && (
-               <View style={styles.emptyTab}>
-                  <Ionicons name="person-circle-outline" size={48} color={COLORS.text.tertiary} />
-                  <Text style={styles.emptyText}>Detailed Bio Coming Soon</Text>
-               </View>
-             )}
+             {activeTab === 'Projects' && renderPortfolioGrid()}
+             {activeTab === 'About' && renderAbout()}
           </View>
         </View>
         
@@ -490,12 +614,39 @@ const styles = StyleSheet.create({
     color: COLORS.text.tertiary,
   },
   
+  // Completion Meter
+  completionContainer: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 0, ...SHADOWS.small },
+  completionHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  completionTitle: { fontWeight: '700', fontSize: 14 },
+  completionSub: { fontSize: 12, color: COLORS.text.secondary },
+  completionTrack: { height: 8, backgroundColor: '#eee', borderRadius: 4, overflow: 'hidden' },
+  completionFill: { height: '100%', borderRadius: 4 },
+
+  // Portfolio Grid
+  portfolioGrid: { flexDirection: 'row', gap: 10 },
+  portfolioColumn: { flex: 1, gap: 10 },
+  portfolioItem: { borderRadius: 12, overflow: 'hidden', backgroundColor: '#eee', marginBottom: 0 },
+  portfolioImage: { width: '100%', height: '100%' },
+  portfolioOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 10, backgroundColor: 'rgba(0,0,0,0.6)' },
+  portfolioTitle: { color: 'white', fontWeight: 'bold', fontSize: 14 },
+
+  // Mutual
+  mutualContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f0f8ff', padding: 12, borderRadius: 12 },
+  stackedAvatars: { flexDirection: 'row', marginRight: 12 },
+  miniAvatar: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: 'white' },
+  mutualText: { flex: 1, fontSize: 12, color: COLORS.text.secondary },
+
+  // New Buttons
+  iconBtn: { padding: 10, backgroundColor: COLORS.background.secondary, borderRadius: 20 },
+  qrBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, padding: 8, backgroundColor: COLORS.background.secondary, borderRadius: 20 },
+  qrText: { color: COLORS.primary, fontWeight: '600', fontSize: 12 },
+
   // Activity
   activityItem: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
+    backgroundColor: '#fff', 
     padding: 12,
-    borderRadius: 12,
+    borderRadius: 12, 
     marginBottom: 10,
     alignItems: 'center',
     borderWidth: 1,
@@ -516,6 +667,7 @@ const styles = StyleSheet.create({
   activityText: {
     fontSize: 14,
     color: COLORS.text.primary,
+     fontWeight: '500',
     marginBottom: 4,
     lineHeight: 20,
   },
@@ -540,5 +692,22 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
-  }
+  },
+
+  // About Section Styles
+  sectionCard: { backgroundColor: 'white', borderRadius: 12, padding: 16, ...SHADOWS.small },
+  sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 12, color: COLORS.text.primary },
+  sectionBody: { fontSize: 14, color: COLORS.text.secondary, lineHeight: 22 },
+  
+  timelineItem: { flexDirection: 'row', gap: 12, marginBottom: 12 },
+  timelineDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.primary, marginTop: 6 },
+  timelineContent: { flex: 1 },
+  timelineTitle: { fontSize: 14, fontWeight: '600', color: COLORS.text.primary },
+  timelineSubtitle: { fontSize: 12, color: COLORS.text.tertiary, marginBottom: 4 },
+  timelineBody: { fontSize: 13, color: COLORS.text.secondary },
+
+  recommendationBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 12, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, marginTop: 8 },
+  recommendationText: { color: COLORS.primary, fontWeight: '600' },
+  
+  avatarPulse: { position: 'absolute', top: -4, left: -4, right: -4, bottom: -4, borderRadius: 100, borderWidth: 2, opacity: 0.5 }
 });

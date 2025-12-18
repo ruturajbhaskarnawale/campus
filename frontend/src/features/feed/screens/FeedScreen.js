@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, FlatList, StyleSheet, Text, SafeAreaView, RefreshControl, StatusBar, TextInput, TouchableOpacity, Animated, Platform, ActivityIndicator } from 'react-native';
+import { View, FlatList, StyleSheet, Text, SafeAreaView, RefreshControl, StatusBar, TextInput, TouchableOpacity, Animated, Platform, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import ProjectCard from '../../../core/widgets/ProjectCard';
 import client from '../../../core/api/client';
 import { FeedSkeleton } from '../../../core/widgets/SkeletonLoader';
 import { COLORS, SPACING, FONTS, RADIUS, SHADOWS } from '../../../core/design/Theme';
 import PeopleYouMayKnow from '../components/PeopleYouMayKnow';
+import { useNavigationContext } from '../../../context/NavigationContext';
+import { useToast } from '../../../core/providers/ToastProvider';
 
 const CATEGORIES = ["All", "AI/ML", "Web Dev", "Mobile", "Blockchain", "Design", "Data"];
 
@@ -19,9 +21,35 @@ export default function FeedScreen({ navigation }) {
     const [showNewPosts, setShowNewPosts] = useState(false);
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
+    const { showToast } = useToast();
     
     const flatListRef = useRef(null);
     const scrollY = useRef(new Animated.Value(0)).current;
+    
+    // Responsive Logic
+    const { width } = useWindowDimensions();
+    const isDesktop = width >= 768;
+
+    // Config Hide on Scroll
+    const { setTabBarVisible } = useNavigationContext();
+    const lastOffsetY = useRef(0);
+    
+    const handleScroll = (event) => {
+        const currentOffset = event.nativeEvent.contentOffset.y;
+        const diff = currentOffset - lastOffsetY.current;
+
+        // Only toggle if significant scroll
+        if (Math.abs(diff) > 20) {
+            if (diff > 0 && currentOffset > 100) {
+                 // Scrolling Down -> Hide
+                 setTabBarVisible(false);
+            } else {
+                 // Scrolling Up or Top -> Show
+                 setTabBarVisible(true);
+            }
+        }
+        lastOffsetY.current = currentOffset;
+    };
 
     const fetchPosts = useCallback(async (pageNum = 1, shouldRefresh = false) => {
         try {
@@ -30,12 +58,6 @@ export default function FeedScreen({ navigation }) {
             // Query Params
             let url = `/feed?page=${pageNum}&limit=10`;
             if (selectedCategory !== "All") url += `&skill=${selectedCategory}`;
-            // Note: Search usually requires a separate endpoint or param, assuming client side for now 
-            // OR backend search support. Based on routes.py, only 'skill' and 'author_uid' are supported.
-            // We will stick to client side filtering for search if backend doesn't support 'q'.
-            // But pagination breaks client side filtering. Ideally backend supports it.
-            // For this implementation, we will fetch sorted feed and filter client side (not ideal for infinite scroll but functional for prototype)
-            // Actually routes.py does NOT support search query yet. Be mindful.
             
             const response = await client.get(url);
             let data = response.data.data || [];
@@ -44,7 +66,6 @@ export default function FeedScreen({ navigation }) {
             if (shouldRefresh || pageNum === 1) {
                 // Determine if there are more
                 setHasMore(data.length >= 10);
-                
                 // Client side search filtering (limited to fetched batch - trade off)
                 if (searchQuery) {
                      data = data.filter(p => p.title.toLowerCase().includes(searchQuery.toLowerCase()) || p.description.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -57,6 +78,8 @@ export default function FeedScreen({ navigation }) {
 
         } catch (error) {
             console.error("Failed to fetch posts:", error);
+            showToast("Failed to load feed. Network error or session expired.", "error");
+            if (pageNum === 1) setPosts([]);
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -114,12 +137,16 @@ export default function FeedScreen({ navigation }) {
         });
 
         return (
-            <Animated.View style={[styles.headerContainer, { 
-                backgroundColor: COLORS.background.secondary,
-                shadowOpacity: headerOpacity,
-                elevation: headerOpacity.interpolate({ inputRange:[0, 1], outputRange:[0, 4] }) 
-            }]}>
-                <View style={styles.searchBar}>
+            <Animated.View style={[
+                styles.headerContainer, 
+                { 
+                    backgroundColor: COLORS.background.secondary,
+                    shadowOpacity: headerOpacity,
+                    elevation: headerOpacity.interpolate({ inputRange:[0, 1], outputRange:[0, 4] }),
+                    top: isDesktop ? 64 : 0, // Push below Navbar on Desktop
+                }
+            ]}>
+                <View style={[styles.searchBar, isDesktop && { maxWidth: 600, alignSelf: 'center', width: '100%' }]}>
                     <Ionicons name="search-outline" size={20} color={COLORS.text.tertiary} />
                     <TextInput 
                         style={styles.input} 
@@ -127,13 +154,18 @@ export default function FeedScreen({ navigation }) {
                         placeholderTextColor={COLORS.text.tertiary}
                         value={searchQuery}
                         onChangeText={setSearchQuery}
+                        // Web outline fix
+                        {...((Platform.OS === 'web') ? { style: [styles.input, { outlineStyle: 'none' }] } : {})}
                     />
                 </View>
                 <FlatList 
                     horizontal 
                     data={CATEGORIES}
                     showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.categoriesList}
+                    contentContainerStyle={[
+                        styles.categoriesList, 
+                        isDesktop && { justifyContent: 'center', width: '100%', maxWidth: 700, alignSelf: 'center' }
+                    ]}
                     renderItem={({ item }) => (
                         <TouchableOpacity 
                             style={[styles.categoryChip, selectedCategory === item && styles.categoryChipActive]}
@@ -183,8 +215,12 @@ export default function FeedScreen({ navigation }) {
                 data={posts}
                 renderItem={renderItem}
                 keyExtractor={item => item.id}
-                contentContainerStyle={styles.list}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} progressViewOffset={60} />}
+                contentContainerStyle={[
+                    styles.list, 
+                    isDesktop && { paddingTop: 130 + 64, // Adjust for Navbar + Header
+                                   maxWidth: 800, alignSelf: 'center', width: '100%' } 
+                ]} 
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} progressViewOffset={isDesktop ? 120 : 60} />}
                 ListEmptyComponent={
                     <View style={styles.center}>
                         <Ionicons name="folder-open-outline" size={64} color={COLORS.text.tertiary} />
@@ -193,7 +229,7 @@ export default function FeedScreen({ navigation }) {
                 }
                 onScroll={Animated.event(
                     [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-                    { useNativeDriver: false } // Native driver not supported for layout props often on web
+                    { useNativeDriver: false, listener: handleScroll } 
                 )}
                 onEndReached={loadMore}
                 onEndReachedThreshold={0.5}
@@ -222,7 +258,7 @@ const styles = StyleSheet.create({
         paddingTop: Platform.OS === 'android' ? 40 : 0 
     },
     searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.background.tertiary, margin: SPACING.m, paddingHorizontal: SPACING.m, borderRadius: RADIUS.m, height: 44 },
-    input: { flex: 1, marginLeft: SPACING.s, fontSize: 16, color: COLORS.text.primary, height: '100%', outlineStyle: 'none' }, 
+    input: { flex: 1, marginLeft: SPACING.s, fontSize: 16, color: COLORS.text.primary, height: '100%' }, 
     categoriesList: { paddingHorizontal: SPACING.m },
     categoryChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: RADIUS.round, backgroundColor: COLORS.background.tertiary, marginRight: SPACING.s, borderWidth: 1, borderColor: 'transparent' },
     categoryChipActive: { backgroundColor: COLORS.primary + '15', borderColor: COLORS.primary },

@@ -64,3 +64,50 @@ def register_token():
         return jsonify({"message": "Registered"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@notifications_bp.route('/mark_read', methods=['POST'])
+def mark_read():
+    try:
+        data = request.json or {}
+        uid = data.get('uid')
+        nid = data.get('nid')
+        if not uid or not nid:
+            return jsonify({"error": "uid and nid required"}), 400
+        
+        db = get_db()
+        db.collection('users').document(uid).collection('notifications').document(nid).update({'read': True})
+        return jsonify({"message": "Marked read"}), 200
+    except Exception as e:
+        # If document not found, just return success or 404, but don't 500
+        if 'NotFound' in str(e) or 'No document to update' in str(e):
+             return jsonify({"message": "Notification not found or already deleted"}), 404
+        return jsonify({"error": str(e)}), 500
+
+
+@notifications_bp.route('/mark_all_read', methods=['POST'])
+def mark_all_read():
+    try:
+        data = request.json or {}
+        uid = data.get('uid')
+        if not uid:
+            return jsonify({"error": "uid required"}), 400
+        
+        db = get_db()
+        # Batch update (limit 500)
+        batch = db.batch()
+        notifs = db.collection('users').document(uid).collection('notifications').where(filter=firestore.FieldFilter('read', '==', False)).stream()
+        
+        count = 0
+        for n in notifs:
+            batch.update(n.reference, {'read': True})
+            count += 1
+            if count >= 400: # safety limit per batch
+                break
+        
+        if count > 0:
+            batch.commit()
+            
+        return jsonify({"message": f"Marked {count} notifications as read"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

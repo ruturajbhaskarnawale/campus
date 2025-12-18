@@ -62,7 +62,8 @@ def unified_search():
         limit = int(request.args.get('limit', 20))
         
         if not query and not skills_filter:
-            return jsonify({"error": "Query or skills filter required"}), 400
+            # Allow empty query if we just want to list items (browse mode)
+            pass
         
         db = get_db()
         results = {
@@ -149,8 +150,8 @@ def search_users(db, query, skills_filter, availability_filter, limit):
                 if user_data.get('availability') != availability_filter:
                     continue
             
-            # Only include if score > 0 or has skills match
-            if score > 0 or (skills_filter and user_skills):
+            # Only include if score > 0 or has skills match or browsing (no query)
+            if score > 0 or (skills_filter and user_skills) or (not query and not skills_filter):
                 user_data['relevanceScore'] = score
                 
                 # Add additional info
@@ -412,3 +413,68 @@ def save_search_analytics(query, search_type, results_count, skills):
         db.collection('search_analytics').document().set(analytics)
     except Exception as e:
         print(f"Analytics save error: {e}")
+@search_bp.route('/featured', methods=['GET'])
+@cached(timeout=600)
+def get_featured():
+    """Get a featured spotlight (Creator & Project)"""
+    try:
+        db = get_db()
+        featured = {}
+        
+        # 1. Top Creator (Score > 1000 or manually featured)
+        # For MVP, just get random high-xp user
+        users = db.collection('users').order_by('xp', direction=firestore.Query.DESCENDING).limit(1).stream()
+        for u in users:
+            d = u.to_dict()
+            featured['creator'] = {
+                'uid': u.id,
+                'name': d.get('name'),
+                'bio': d.get('bio'),
+                'avatar': d.get('avatar_url'),
+                'skills': d.get('skills', [])[:3]
+            }
+
+        # 2. Trending Project (Most Likes in last 7 days)
+        # Using simple sort for MVP
+        projects = db.collection('posts').where(filter=firestore.FieldFilter('status', '==', 'active')).order_by('likes', direction=firestore.Query.DESCENDING).limit(1).stream()
+        for p in projects:
+            d = p.to_dict()
+            featured['project'] = {
+                'id': p.id,
+                'title': d.get('title'),
+                'description': d.get('description'),
+                'image': d.get('media_urls', [])[0] if d.get('media_urls') else None
+            }
+            
+        return jsonify(featured), 200
+    except Exception as e:
+        print(f"Featured error: {e}")
+        return jsonify({}), 200
+
+@search_bp.route('/skill_graph', methods=['GET'])
+@cached(timeout=3600)
+def get_skill_graph():
+    """Return related skills for the visualization"""
+    # In a real app, this would be computed from user co-occurrence
+    # Hardcoded graph for MVP demo
+    graph = {
+        'React': ['Redux', 'JavaScript', 'TypeScript', 'Node.js', 'Next.js'],
+        'Python': ['Django', 'Flask', 'Data Science', 'Machine Learning', 'AI'],
+        'Machine Learning': ['Python', 'TensorFlow', 'PyTorch', 'Data Analysis'],
+        'UI/UX': ['Figma', 'Adobe XD', 'Prototyping', 'User Research'],
+        'Node.js': ['Express', 'MongoDB', 'JavaScript', 'Backend'],
+        'Unity': ['C#', 'Game Development', '3D Modeling', 'VR/AR']
+    }
+    
+    # Check if querying specific node
+    root = request.args.get('root')
+    if root:
+        # Find closest match
+        related = []
+        for key, vals in graph.items():
+            if root.lower() in key.lower():
+                related = vals
+                break
+        return jsonify({'root': root, 'related': related}), 200
+
+    return jsonify(graph), 200

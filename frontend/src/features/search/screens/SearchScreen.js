@@ -325,88 +325,119 @@ export default function SearchScreen({ navigation }) {
     return (
       <Animated.View style={[styles.filtersPanel, { opacity: fadeAnim }]}>
         <View style={styles.filterHeader}>
-          <Text style={styles.filterTitle}>Filters</Text>
+          <Text style={styles.filterTitle}>Advanced Filters</Text>
           <TouchableOpacity onPress={() => setShowFilters(false)}>
             <Ionicons name="close" size={24} color={COLORS.text.primary} />
           </TouchableOpacity>
         </View>
-        
-        {/* Skills Filter */}
-        <View style={styles.filterSection}>
-          <Text style={styles.filterLabel}>Skills</Text>
-          <View style={styles.skillsInput}>
-            <TextInput
-              style={styles.filterInput}
-              placeholder="Add skill and press enter..."
-              placeholderTextColor={COLORS.text.tertiary}
-              onSubmitEditing={(e) => {
-                const skill = e.nativeEvent.text.trim();
-                if (skill && !filters.skills.includes(skill)) {
-                  setFilters({ ...filters, skills: [...filters.skills, skill] });
-                  e.target.clear();
-                }
-              }}
-            />
-          </View>
-          {filters.skills.length > 0 && (
-            <View style={styles.skillTags}>
-              {filters.skills.map((skill, index) => (
-                <View key={index} style={styles.skillTag}>
-                  <LinearGradient
-                    colors={[COLORS.primary + '30', COLORS.secondary + '30']}
-                    style={StyleSheet.absoluteFill}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                  />
-                  <Text style={styles.skillTagText}>{skill}</Text>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setFilters({
-                        ...filters,
-                        skills: filters.skills.filter(s => s !== skill)
-                      });
-                    }}
-                  >
-                    <Ionicons name="close" size={14} color={COLORS.primary} />
+
+        <ScrollView style={{ maxHeight: 400 }}>
+            {/* Skills Filter */}
+            <View style={styles.filterSection}>
+              <Text style={styles.filterLabel}>Skills</Text>
+              <View style={styles.skillsInput}>
+                <TextInput
+                  style={styles.filterInput}
+                  placeholder="e.g. React, Python..."
+                  placeholderTextColor={COLORS.text.tertiary}
+                  onSubmitEditing={(e) => {
+                    const skill = e.nativeEvent.text.trim();
+                    if (skill && !filters.skills.includes(skill)) {
+                      setFilters({ ...filters, skills: [...filters.skills, skill] });
+                      e.target.clear();
+                    }
+                  }}
+                />
+              </View>
+              <View style={styles.skillTags}>
+                {filters.skills.map((skill, index) => (
+                  <TouchableOpacity key={index} style={styles.skillTag} onPress={() => setFilters({...filters, skills: filters.skills.filter(s => s !== skill)})}>
+                     <Text style={styles.skillTagText}>{skill} ×</Text>
                   </TouchableOpacity>
-                </View>
-              ))}
+                ))}
+              </View>
             </View>
-          )}
-        </View>
-        
-        {/* Sort Options */}
-        <View style={styles.filterSection}>
-          <Text style={styles.filterLabel}>Sort By</Text>
-          <View style={styles.sortOptions}>
-            {['relevance', 'recent', 'popular'].map(sort => (
-              <TouchableOpacity
-                key={sort}
-                style={[
-                  styles.sortOption,
-                  filters.sortBy === sort && styles.sortOptionActive
-                ]}
-                onPress={() => setFilters({ ...filters, sortBy: sort })}
-                activeOpacity={0.7}
-              >
-                {filters.sortBy === sort && (
-                  <LinearGradient
-                    colors={[COLORS.primary, COLORS.secondary]}
-                    style={StyleSheet.absoluteFill}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                  />
-                )}
-                <Text style={[
-                  styles.sortOptionText,
-                  filters.sortBy === sort && styles.sortOptionTextActive
-                ]}>
-                  {sort.charAt(0).toUpperCase() + sort.slice(1)}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
+
+            {/* University Year */}
+            <View style={styles.filterSection}>
+                <Text style={styles.filterLabel}>University Year</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap: 8}}>
+                    {['1st Year', '2nd Year', '3rd Year', '4th Year', 'Grad'].map(year => (
+                        <TouchableOpacity 
+                            key={year} 
+                            style={[styles.filterChip, filters.universityYear === year && styles.filterChipActive]}
+                            onPress={() => setFilters({...filters, universityYear: filters.universityYear === year ? null : year})}
+                        >
+                            <Text style={[styles.filterChipText, filters.universityYear === year && styles.filterChipTextActive]}>{year}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
+            </View>
+
+            {/* Department */}
+            <View style={styles.filterSection}>
+                <Text style={styles.filterLabel}>Department</Text>
+                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap: 8}}>
+                    {['CS', 'IT', 'E&TC', 'Mech', 'Civil', 'AI&DS'].map(dept => (
+                        <TouchableOpacity 
+                            key={dept} 
+                            style={[styles.filterChip, filters.department === dept && styles.filterChipActive]}
+                            onPress={() => setFilters({...filters, department: filters.department === dept ? null : dept})}
+                        >
+                            <Text style={[styles.filterChipText, filters.department === dept && styles.filterChipTextActive]}>{dept}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
+            </View>
+
+            {/* Date Posted */}
+            <View style={styles.filterSection}>
+                <Text style={styles.filterLabel}>Date Posted</Text>
+                <View style={styles.sortOptions}>
+                    {['Any Time', 'Past 24h', 'Past Week', 'Past Month'].map(date => (
+                        <TouchableOpacity 
+                            key={date} 
+                            style={[styles.sortOption, filters.datePosted === date && styles.sortOptionActive]}
+                            onPress={() => setFilters({...filters, datePosted: date})}
+                        >
+                            <Text style={[styles.sortOptionText, filters.datePosted === date && styles.sortOptionTextActive]}>{date}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+            </View>
+            
+            {/* Sort Options */}
+            <View style={styles.filterSection}>
+              <Text style={styles.filterLabel}>Sort By</Text>
+              <View style={styles.sortOptions}>
+                {['relevance', 'recent', 'popular'].map(sort => (
+                  <TouchableOpacity
+                    key={sort}
+                    style={[
+                      styles.sortOption,
+                      filters.sortBy === sort && styles.sortOptionActive
+                    ]}
+                    onPress={() => setFilters({ ...filters, sortBy: sort })}
+                  >
+                    <Text style={[
+                      styles.sortOptionText,
+                      filters.sortBy === sort && styles.sortOptionTextActive
+                    ]}>
+                      {sort.charAt(0).toUpperCase() + sort.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Save Search Toggle */}
+            <View style={styles.saveSearchRow}>
+                <Text style={styles.saveSearchText}>Alert me for new results</Text>
+                <TouchableOpacity onPress={() => setFilters({...filters, saveSearch: !filters.saveSearch})}>
+                    <Ionicons name={filters.saveSearch ? "toggle" : "toggle-outline"} size={32} color={filters.saveSearch ? COLORS.primary : COLORS.text.tertiary} />
+                </TouchableOpacity>
+            </View>
+        </ScrollView>
         
         <TouchableOpacity
           style={styles.applyFiltersButton}
@@ -430,7 +461,7 @@ export default function SearchScreen({ navigation }) {
     );
   };
 
-  // Render User Card
+  // Render User Card (Redesigned)
   const renderUserCard = ({ item, index }) => (
     <Animated.View
       style={[
@@ -442,79 +473,64 @@ export default function SearchScreen({ navigation }) {
       ]}
     >
       <TouchableOpacity
-        onPress={() => navigation.navigate('UserProfile', { userId: item.uid })}
+        style={styles.cardInner}
+        onPress={() => navigation.navigate('ProfileDetail', { userId: item.uid })}
         activeOpacity={0.9}
       >
-        <View style={styles.cardContent}>
-          <View style={styles.cardHeader}>
-            <Image
-              source={{ uri: item.avatar_url || 'https://via.placeholder.com/60' }}
-              style={styles.avatar}
-            />
-            {item.online && <View style={styles.onlineDot} />}
-            <View style={styles.cardInfo}>
-              <Text style={styles.userName} numberOfLines={1}>{item.name}</Text>
-              <Text style={styles.userBio} numberOfLines={2}>{item.bio || 'No bio available'}</Text>
-              <View style={styles.statsRow}>
-                <View style={styles.statItem}>
-                  <Ionicons name="people" size={14} color={COLORS.text.tertiary} />
-                  <Text style={styles.statText}>{item.followersCount || 0} followers</Text>
-                </View>
-              </View>
+        <View style={styles.cardHeaderRow}>
+          <Image
+            source={{ uri: item.avatar_url || 'https://via.placeholder.com/60' }}
+            style={styles.avatarLarge}
+          />
+          <View style={styles.cardMainInfo}>
+            <View style={styles.nameRow}>
+              <Text style={styles.userNameTitle}>{item.name}</Text>
+              {item.online && <View style={styles.onlineBadge} />}
+            </View>
+            <Text style={styles.userRoleText} numberOfLines={1}>{item.bio || 'Ready to collaborate'}</Text>
+            <View style={styles.miniStatsRow}>
+              <Ionicons name="people-outline" size={12} color={COLORS.text.tertiary} />
+              <Text style={styles.miniStatText}>{item.followersCount || 0} followers</Text>
+              <View style={styles.dotSeparator} />
+              <Ionicons name="star-outline" size={12} color={COLORS.text.tertiary} />
+              <Text style={styles.miniStatText}>{item.xp || 0} XP</Text>
             </View>
           </View>
-          
           {renderMatchScore(item.matchScore)}
-          
-          {item.skills && item.skills.length > 0 && (
-            <View style={styles.skillsRow}>
-              {item.skills.slice(0, 3).map((skill, idx) => (
-                <View key={idx} style={styles.skillPill}>
-                  <Text style={styles.skillPillText}>{skill}</Text>
-                </View>
-              ))}
-              {item.skills.length > 3 && (
-                <Text style={styles.moreSkills}>+{item.skills.length - 3} more</Text>
-              )}
-            </View>
-          )}
-          
-          <View style={styles.cardActions}>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => handleFollow(item.uid)}
-              activeOpacity={0.7}
-            >
-              <LinearGradient
-                colors={[COLORS.primary + '20', COLORS.secondary + '20']}
-                style={StyleSheet.absoluteFill}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              />
-              <Ionicons name="person-add" size={16} color={COLORS.primary} />
-              <Text style={styles.actionButtonText}>Follow</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => handleMessage(item.uid, item.name)}
-              activeOpacity={0.7}
-            >
-              <LinearGradient
-                colors={[COLORS.primary + '20', COLORS.secondary + '20']}
-                style={StyleSheet.absoluteFill}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              />
-              <Ionicons name="chatbubble" size={16} color={COLORS.primary} />
-              <Text style={styles.actionButtonText}>Message</Text>
-            </TouchableOpacity>
+        </View>
+
+        {item.skills && item.skills.length > 0 && (
+          <View style={styles.skillTagsRow}>
+            {item.skills.slice(0, 3).map((skill, idx) => (
+              <View key={idx} style={styles.skillTagSmall}>
+                <Text style={styles.skillTagTextSmall}>{skill}</Text>
+              </View>
+            ))}
+            {item.skills.length > 3 && (
+              <Text style={styles.moreSkillsText}>+{item.skills.length - 3}</Text>
+            )}
           </View>
+        )}
+
+        <View style={styles.cardActionRow}>
+          <TouchableOpacity 
+            style={[styles.actionBtn, styles.actionBtnPrimary]} 
+            onPress={() => handleFollow(item.uid)}
+          >
+            <Text style={styles.actionBtnTextPrimary}>Connect</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.actionBtn, styles.actionBtnSecondary]} 
+            onPress={() => handleMessage(item.uid, item.name)}
+          >
+            <Ionicons name="chatbubble-outline" size={18} color={COLORS.text.primary} />
+          </TouchableOpacity>
         </View>
       </TouchableOpacity>
     </Animated.View>
   );
 
-  // Render Project Card
+  // Render Project Card (Redesigned)
   const renderProjectCard = ({ item, index }) => (
     <Animated.View
       style={[
@@ -526,41 +542,36 @@ export default function SearchScreen({ navigation }) {
       ]}
     >
       <TouchableOpacity
+        style={styles.cardInner}
         onPress={() => navigation.navigate('ProjectDetails', { postId: item.id })}
         activeOpacity={0.9}
       >
-        <View style={styles.cardContent}>
-          <Text style={styles.projectTitle} numberOfLines={2}>{item.title}</Text>
-          <Text style={styles.projectDesc} numberOfLines={3}>{item.description}</Text>
-          
-          {item.authorName && (
-            <View style={styles.authorRow}>
-              <Ionicons name="person-circle" size={16} color={COLORS.text.secondary} />
-              <Text style={styles.authorName}>by {item.authorName}</Text>
-            </View>
-          )}
-          
+        <View style={styles.projectHeaderRow}>
+          <View style={styles.projectIconPlaceholder}>
+            <Ionicons name="rocket-outline" size={24} color={COLORS.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.projectTitleText} numberOfLines={1}>{item.title}</Text>
+            <Text style={styles.projectAuthorText}>by {item.authorName || 'Unknown'}</Text>
+          </View>
           {renderMatchScore(item.matchScore)}
-          
-          {item.skills_needed && item.skills_needed.length > 0 && (
-            <View style={styles.skillsRow}>
-              {item.skills_needed.slice(0, 4).map((skill, idx) => (
-                <View key={idx} style={styles.skillPill}>
-                  <Text style={styles.skillPillText}>{skill}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-          
-          <View style={styles.projectStats}>
-            <View style={styles.statGroup}>
-              <Ionicons name="people" size={16} color={COLORS.primary} />
-              <Text style={styles.statValue}>{item.team_size || 0} / {item.max_team_size || 5}</Text>
-            </View>
-            <View style={styles.statGroup}>
-              <Ionicons name="heart" size={16} color={COLORS.error} />
-              <Text style={styles.statValue}>{item.likes || 0}</Text>
-            </View>
+        </View>
+
+        <Text style={styles.projectDescText} numberOfLines={2}>{item.description}</Text>
+
+        <View style={styles.projectFooterRow}>
+          <View style={styles.projectStatBadge}>
+            <Ionicons name="people" size={12} color={COLORS.primary} />
+            <Text style={styles.projectStatText}>{item.team_size || 0}/{item.max_team_size || 5}</Text>
+          </View>
+          <View style={styles.projectStatBadge}>
+            <Ionicons name="heart" size={12} color={COLORS.error} />
+            <Text style={styles.projectStatText}>{item.likes || 0}</Text>
+          </View>
+          <View style={{ flex: 1 }} />
+          <View style={styles.viewDetailsBtn}>
+            <Text style={styles.viewDetailsText}>View</Text>
+            <Ionicons name="arrow-forward" size={12} color={COLORS.primary} />
           </View>
         </View>
       </TouchableOpacity>
@@ -573,17 +584,9 @@ export default function SearchScreen({ navigation }) {
     
     return (
       <View style={styles.searchStats}>
-        <LinearGradient
-          colors={[COLORS.primary + '10', COLORS.secondary + '10']}
-          style={styles.statsGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-        >
-          <Ionicons name="flash" size={16} color={COLORS.primary} />
-          <Text style={styles.searchStatsText}>
-            {results.total} results found in {searchTime}ms
-          </Text>
-        </LinearGradient>
+         <Text style={styles.searchStatsSimpleText}>
+            Found {results.total} results in {searchTime}ms
+         </Text>
       </View>
     );
   };
@@ -1266,6 +1269,57 @@ const styles = StyleSheet.create({
     color: COLORS.text.tertiary,
   },
   
+  // Featured Section
+  featuredSection: { marginTop: 10, paddingLeft: SPACING.md, marginBottom: 20 },
+  spotlightCard: {
+      width: 250, height: 160, backgroundColor: COLORS.background.secondary, borderRadius: RADIUS.lg,
+      marginRight: SPACING.m, padding: SPACING.md, position: 'relative', overflow: 'hidden', ...SHADOWS.medium
+  },
+  spotlightBadge: {
+      position: 'absolute', top: 10, left: 10, backgroundColor: COLORS.primary, borderRadius: 4, padding: 4, zIndex: 10
+  },
+  spotlightBadgeText: { color: 'white', fontSize: 10, fontWeight: 'bold' },
+  spotlightAvatar: { width: 60, height: 60, borderRadius: 30, marginBottom: 10 },
+  spotlightName: { fontSize: 16, fontWeight: 'bold' },
+  spotlightBio: { fontSize: 12, color: '#666' },
+  spotlightProjectImage: { width: '100%', height: '100%', position: 'absolute' },
+  spotlightOverlay: { ...StyleSheet.absoluteFillObject },
+  spotlightProjectInfo: { position: 'absolute', bottom: 10, left: 10, right: 10 },
+  spotlightProjectTitle: { color: 'white', fontWeight: 'bold', fontSize: 16, textShadowRadius: 4, textShadowColor: 'black' },
+
+  // Skill Graph
+  graphBanner: { margin: SPACING.md, borderRadius: RADIUS.lg, overflow: 'hidden', height: 80 },
+  graphBannerBg: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20 },
+  graphBannerTitle: { color: 'white', fontWeight: 'bold', fontSize: 18 },
+  graphBannerSub: { color: 'rgba(255,255,255,0.8)', fontSize: 12 },
+  graphContainer: { margin: SPACING.md, padding: SPACING.md, backgroundColor: '#f0f4ff', borderRadius: RADIUS.lg, minHeight: 300 },
+  graphHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
+  graphTitle: { fontWeight: 'bold', fontSize: 18, color: COLORS.primary },
+  graphContent: { alignItems: 'center' },
+  graphNodeRoot: { width: 80, height: 80, borderRadius: 40, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', marginBottom: 40, ...SHADOWS.large },
+  graphNodeTextRoot: { color: 'white', fontWeight: 'bold', textAlign: 'center' },
+  graphConnections: { position: 'absolute', width: 2, height: 40, backgroundColor: '#ccc', top: 80 },
+  graphRelatedNodes: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10 },
+  graphNode: { padding: 10, backgroundColor: 'white', borderRadius: 20, borderWidth: 1, borderColor: COLORS.primary, marginBottom: 10 },
+  graphNodeText: { color: COLORS.primary, fontWeight: '600' },
+  graphHint: { marginTop: 20, color: '#888', fontStyle: 'italic', fontSize: 12 },
+
+  // Filters
+  filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#f0f0f0', marginRight: 8 },
+  filterChipActive: { backgroundColor: COLORS.primary },
+  filterChipText: { fontSize: 13, color: COLORS.text.secondary },
+  filterChipTextActive: { color: 'white', fontWeight: '600' },
+  
+  saveSearchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 20, paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#f0f0f0' },
+  saveSearchText: { fontSize: 14, fontWeight: '600', color: COLORS.text.primary },
+
+  // Sort Options
+  sortOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  sortOption: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#f5f5f5', marginBottom: 8 },
+  sortOptionActive: { backgroundColor: COLORS.primary },
+  sortOptionText: { fontSize: 12, color: COLORS.text.secondary },
+  sortOptionTextActive: { color: 'white' },
+
   // Loading
   loadingContainer: {
     flex: 1,

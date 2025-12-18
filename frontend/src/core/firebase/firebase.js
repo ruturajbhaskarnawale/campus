@@ -49,3 +49,22 @@ export function getCurrentUser() {
   if (!auth) initFirebase();
   return auth.currentUser;
 }
+
+// Initialize services immediately if app is already initialized
+if (getApps().length) {
+    const app = getApps()[0];
+    // We lazy load these getters to ensure initFirebase is called if needed, 
+    // but typically we want singletons.
+}
+
+export function getDb() {
+    if (!firebaseApp) initFirebase();
+    const { getFirestore } = require('firebase/firestore');
+    return getFirestore(firebaseApp);
+}
+
+export function getStorage() {
+    if (!firebaseApp) initFirebase();
+    const { getStorage } = require('firebase/storage');
+    return getStorage(firebaseApp);
+}

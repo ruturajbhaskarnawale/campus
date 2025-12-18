@@ -318,3 +318,110 @@ def upload_avatar():
         return jsonify({"message": "Avatar uploaded", "avatar_url": public_url}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+
+@auth_bp.route('/profile/<uid>/enhanced', methods=['GET'])
+def get_enhanced_profile(uid):
+    try:
+        db = get_db()
+        user_ref = db.collection('users').document(uid)
+        doc = user_ref.get()
+        
+        if not doc.exists:
+            return jsonify({"error": "User not found"}), 404
+            
+        data = doc.to_dict()
+        data['uid'] = uid
+        
+        # calculate profile completion
+        fields = ['name', 'bio', 'avatar_url', 'cover_photo', 'skills', 'github_link', 'linkedin_link']
+        filled = sum(1 for f in fields if data.get(f))
+        completion = int((filled / len(fields)) * 100)
+        
+        # Mock badges if not present
+        if 'badges' not in data:
+            data['badges'] = [
+                {'name': 'Early Adopter', 'icon': 'rocket'},
+                {'name': 'Top Contributor', 'icon': 'star'}
+            ]
+            
+        data['completion_percent'] = completion
+        data['current_xp'] = data.get('xp', 1200)
+        data['next_level_xp'] = 2000
+        data['level'] = 5
+        data['theme_color'] = data.get('theme_color', '#4A90E2') # Default blue
+        
+        # Socials
+        data['socials'] = {
+            'github': data.get('github_link'),
+            'linkedin': data.get('linkedin_link'),
+            'website': data.get('website_link')
+        }
+        
+        # Stats
+        data['stats'] = {
+            'projects': 5, # Replace with real count query
+            'views': data.get('profile_views', 120),
+            'connections': 45
+        }
+
+        return jsonify(data), 200
+    except Exception as e:
+        print(e)
+        return jsonify({"error": str(e)}), 500
+
+@auth_bp.route('/profile/<uid>/activity', methods=['GET'])
+def get_activity(uid):
+    try:
+        # Mock activity for now - in real app query 'activities' collection
+        activity = [
+            {'type': 'project', 'text': 'Launched a new project: AI Study Buddy', 'time': '2h ago'},
+            {'type': 'comment', 'text': 'Commented on "React Native Performance"', 'time': '5h ago'},
+            {'type': 'star', 'text': 'Starred "Campus Hub"', 'time': '1d ago'}
+        ]
+        return jsonify(activity), 200
+    except Exception as e:
+        return jsonify([]), 200
+
+@auth_bp.route('/profile/<uid>/contributions', methods=['GET'])
+def get_contributions(uid):
+    try:
+        # Returns a map of date -> count for heatmap
+        # Mock data
+        import datetime
+        today = datetime.date.today()
+        data = {}
+        for i in range(30):
+            d = today - datetime.timedelta(days=i)
+            data[d.isoformat()] = (i % 4) # random 0-3
+        return jsonify(data), 200
+    except Exception as e:
+        return jsonify({}), 200
+
+@auth_bp.route('/profile/<uid>/skills', methods=['GET'])
+def get_skills_breakdown(uid):
+    try:
+        db = get_db()
+        doc = db.collection('users').document(uid).get()
+        if not doc.exists: return jsonify([]), 200
+        
+        skills = doc.to_dict().get('skills', [])
+        # Enrich with endorsement counts (mocked or real)
+        enriched = []
+        for s in skills:
+            enriched.append({
+                'name': s,
+                'endorsements': 12, # mock
+                'endorsed_by_viewer': False
+            })
+        return jsonify(enriched), 200
+    except Exception as e:
+        return jsonify([]), 200
+
+@auth_bp.route('/profile/endorse', methods=['POST'])
+def endorse_skill():
+    try:
+        data = request.json
+        # In real app: add to 'endorsements' collection
+        return jsonify({"message": "Skill endorsed"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400

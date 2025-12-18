@@ -1,23 +1,43 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, RefreshControl, SafeAreaView, Platform } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { 
+  View, 
+  Text, 
+  SectionList, 
+  StyleSheet, 
+  TouchableOpacity, 
+  RefreshControl, 
+  SafeAreaView, 
+  Platform, 
+  Image, 
+  Alert,
+  Animated
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
 import client from '../../../core/api/client';
 import { getCurrentUserId } from '../../../core/auth';
 import { COLORS, SHADOWS, SPACING, RADIUS, FONTS } from '../../../core/design/Theme';
 
+// Enhanced Mock Data covering all scenarios
 const MOCK_ENHANCED_NOTIFS = [
-  { id: 'mock1', type: 'join_request', title: 'Join Request', body: 'Alice Chen wants to join "AI Study Group"', timestamp: '2m ago', read: false, project: 'AI Study Group', user: 'Alice Chen' },
-  { id: 'mock2', type: 'group_like', title: 'Project Love', body: 'Sarah and 5 others liked your project "CampusHub"', timestamp: '1h ago', read: false },
-  { id: 'mock3', type: 'app_status', title: 'Application Update', body: 'Your application to "EcoTracker" is Under Review', timestamp: '3h ago', read: true, status: 'Under Review' },
-  { id: 'mock4', type: 'reminder', title: 'Saved Project', body: 'You saved "CryptoWallet" 3 days ago - applications closing soon!', timestamp: '5h ago', read: true },
-  { id: 'mock5', type: 'mention', title: 'Mentioned you', body: 'Bob: @me check this API endpoint', timestamp: '1d ago', read: true, context: 'Team Alpha Chat' },
-  { id: 'mock6', type: 'skill_alert', title: 'Skill Alert', body: '3 new projects match your "React Native" skill', timestamp: '1d ago', read: true },
-  { id: 'mock7', type: 'digest', title: 'Weekly Digest', body: 'Top projects you missed this week', timestamp: '2d ago', read: true, isDigest: true },
+  // New
+  { id: 'm1', type: 'job_offer', title: 'Job Offer', body: 'Google sent you a job offer for Senior Developer', timestamp: 'Just now', read: false, priority: 'high', avatar: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/768px-Google_%22G%22_logo.svg.png' },
+  { id: 'm2', type: 'group_like', title: 'Viral Post', body: 'Alice, Bob, and 100 others liked your post "AI Future"', timestamp: '2m ago', read: false, image: 'https://placehold.co/150', count: 102 },
+  { id: 'm3', type: 'join_request', title: 'Connection Request', body: 'Sarah Lee wants to connect', timestamp: '10m ago', read: false, user: 'Sarah Lee', avatar: 'https://randomuser.me/api/portraits/women/44.jpg' },
+  
+  // Earlier Today
+  { id: 'm4', type: 'mention', title: 'Mentioned you', body: 'Mike: @me can you review this PR?', timestamp: '2h ago', read: true, context: 'Team Alpha Chat', avatar: 'https://randomuser.me/api/portraits/men/32.jpg' },
+  { id: 'm5', type: 'system_alert', title: 'Maintenance', body: 'System maintenance scheduled for 2 AM', timestamp: '4h ago', read: true, pinned: true },
+  
+  // This Week
+  { id: 'm6', type: 'birthday', title: 'Birthday', body: 'Say Happy Birthday to Alice!', timestamp: 'Yesterday', read: true, user: 'Alice', avatar: 'https://randomuser.me/api/portraits/women/12.jpg' },
+  { id: 'm7', type: 'deadline', title: 'Project Deadline', body: 'CampusHub submission is due tomorrow', timestamp: '2 days ago', read: true, priority: 'high' },
+  { id: 'm8', type: 'digest', title: 'Weekly Digest', body: 'Top projects you missed this week', timestamp: '3 days ago', read: true, isDigest: true },
 ];
 
-export default function NotificationsScreen() {
-  const [items, setItems] = useState([]);
+export default function NotificationsScreen({ navigation }) {
+  const [sections, setSections] = useState([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState('All'); 
   const [uid, setUid] = useState(null);
@@ -34,138 +54,230 @@ export default function NotificationsScreen() {
     setLoading(true);
     try {
       const res = await client.get(`/notifications/list/${userId}`);
-      // Merge real + mock for demo
       const real = res.data || [];
-      setItems([...MOCK_ENHANCED_NOTIFS, ...real]); 
+      const combined = [...MOCK_ENHANCED_NOTIFS, ...real];
+      processData(combined, filter);
     } catch (e) { 
       console.error('fetch notifications', e); 
-      setItems(MOCK_ENHANCED_NOTIFS); // Fallback to mock
+      processData(MOCK_ENHANCED_NOTIFS, filter);
     }
     finally { setLoading(false); }
   };
 
+  const processData = (data, activeFilter) => {
+    // 1. Filter
+    const filtered = data.filter(i => {
+        if (activeFilter === 'All') return true;
+        if (activeFilter === 'Mentions') return i.type === 'mention' || i.title.includes('@');
+        if (activeFilter === 'Requests') return i.type === 'join_request' || i.type === 'connect_request';
+        return true;
+    });
+
+    // 2. Group by Time (Simple logic)
+    const newItems = [];
+    const earlierItems = [];
+    const weekItems = [];
+
+    filtered.forEach(item => {
+        const t = item.timestamp.toLowerCase();
+        if (t.includes('now') || t.includes('m ago') || t.includes('h ago')) {
+            newItems.push(item);
+        } else if (t.includes('yesterday') || t.includes('day')) {
+            earlierItems.push(item);
+        } else {
+            weekItems.push(item);
+        }
+    });
+
+    const sectionsData = [];
+    if (newItems.length) sectionsData.push({ title: 'New', data: newItems });
+    if (earlierItems.length) sectionsData.push({ title: 'Earlier', data: earlierItems });
+    if (weekItems.length) sectionsData.push({ title: 'This Week', data: weekItems });
+
+    setSections(sectionsData);
+  };
+
+  useEffect(() => {
+     // Re-process if filter changes (needs data persistence, for now re-fetch mock)
+     // Ideally we store 'rawItems' state.
+     // For simplicity of this step, re-fetching/using mock directly
+     processData(MOCK_ENHANCED_NOTIFS, filter);
+  }, [filter]);
+
+  const markAllRead = async () => {
+      try {
+          await client.post('/notifications/mark_all_read', { uid });
+          Alert.alert('Success', 'All notifications marked as read');
+          // Update local state visuals
+          const updated = sections.map(sec => ({
+              ...sec,
+              data: sec.data.map(item => ({ ...item, read: true }))
+          }));
+          setSections(updated);
+      } catch (e) {
+          console.error(e);
+      }
+  };
+
+  const handlePress = (item) => {
+      // Optimistic update
+      if (!item.read) {
+          // Update generic sections state
+          const newSections = sections.map(sec => ({
+              ...sec,
+              data: sec.data.map(i => i.id === item.id ? { ...i, read: true } : i)
+          }));
+          setSections(newSections);
+
+          if (uid) {
+              // Fire and forget, suppress error if mock id
+              client.post('/notifications/mark_read', { uid, nid: item.id }).catch(() => {});
+          }
+      }
+      
+      // Navigate based on type
+      if (item.type === 'mention') {
+          // Nav to chat or post
+      } else if (item.type === 'join_request') {
+          // Nav to User Profile
+      }
+  };
+
+  const deleteItem = (itemId) => {
+      // Update state to remove item
+      const newSections = sections.map(sec => ({
+          ...sec,
+          data: sec.data.filter(i => i.id !== itemId)
+      })).filter(sec => sec.data.length > 0);
+      setSections(newSections);
+  };
+
+  const renderSectionHeader = ({ section: { title } }) => (
+    <View style={styles.sectionHeader}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+    </View>
+  );
+
+  const renderRightActions = (progress, dragX, itemId) => {
+      const trans = dragX.interpolate({
+          inputRange: [-100, 0],
+          outputRange: [0, 100],
+          extrapolate: 'clamp',
+      });
+      return (
+          <TouchableOpacity onPress={() => deleteItem(itemId)} style={styles.deleteAction}>
+             <Ionicons name="trash-outline" size={24} color="#fff" />
+          </TouchableOpacity>
+      );
+  };
+
   const NotificationCard = ({ item }) => {
     const isUnread = !item.read;
-
-    // Actionable Join Request
-    if (item.type === 'join_request') {
-      return (
-        <View style={[styles.item, styles.actionItem, isUnread && styles.unreadBorder]}>
-           <View style={styles.row}>
-             <View style={[styles.iconContainer, { backgroundColor: '#e3f2fd' }]}>
-                <Ionicons name="person-add" size={20} color={COLORS.primary} />
-             </View>
-             <View style={{ flex: 1 }}>
-                <Text style={styles.itemTitle}>{item.title}</Text>
-                <Text style={styles.itemBody}>
-                  <Text style={{ fontWeight: 'bold' }}>{item.user}</Text> wants to join <Text style={{ fontWeight: 'bold' }}>{item.project}</Text>
-                </Text>
-                <Text style={styles.time}>{item.timestamp}</Text>
-             </View>
-           </View>
-           <View style={styles.actionButtons}>
-              <TouchableOpacity style={[styles.actionBtn, styles.acceptBtn]} onPress={() => alert('Accepted')}>
-                 <Text style={styles.acceptText}>Accept</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.actionBtn, styles.declineBtn]} onPress={() => alert('Declined')}>
-                 <Text style={styles.declineText}>Decline</Text>
-              </TouchableOpacity>
-           </View>
-        </View>
-      );
-    }
-
-    // Application Status
-    if (item.type === 'app_status') {
-       let statusColor = '#ff9800'; // Under Review
-       if (item.status === 'Accepted') statusColor = '#4caf50';
-       if (item.status === 'Viewed') statusColor = '#2196f3';
-
-       return (
-        <View style={[styles.item, isUnread && styles.unreadBorder]}>
-            <View style={[styles.iconContainer, { backgroundColor: statusColor + '20' }]}>
-               <Ionicons name="briefcase" size={20} color={statusColor} />
-            </View>
-            <View style={{ flex: 1 }}>
-               <Text style={styles.itemTitle}>Application Status: <Text style={{ color: statusColor }}>{item.status}</Text></Text>
-               <Text style={styles.itemBody}>{item.body}</Text>
-               <Text style={styles.time}>{item.timestamp}</Text>
-            </View>
-        </View>
-       );
-    }
-
-    // Weekly Digest
-    if (item.type === 'digest') {
-       return (
-        <View style={[styles.item, styles.digestItem]}>
-            <LinearGradient
-               colors={[COLORS.primary, COLORS.secondary]}
-               style={styles.digestGradient}
-               start={{ x:0, y:0 }} end={{ x:1, y:1 }}
-            >
-               <Ionicons name="newspaper" size={24} color="#fff" style={{ marginRight: 12 }} />
-               <View>
-                  <Text style={styles.digestTitle}>{item.title}</Text>
-                  <Text style={styles.digestBody}>{item.body}</Text>
-               </View>
-               <Ionicons name="chevron-forward" size={24} color="#fff" style={{ marginLeft: 'auto' }} />
-            </LinearGradient>
-        </View>
-       );
-    }
-
-    // Generic
-    const getIcon = (t) => {
-        if (t === 'group_like') return 'heart';
-        if (t === 'reminder') return 'time';
-        if (t === 'mention') return 'at';
-        if (t === 'skill_alert') return 'flash';
-        if (t === 'event') return 'calendar';
-        return 'notifications';
-    }
-    const getColor = (t) => {
-        if (t === 'group_like') return '#e91e63';
-        if (t === 'reminder') return '#ff5722';
-        if (t === 'mention') return '#9c27b0';
-        if (t === 'skill_alert') return '#ffc107';
-        return COLORS.primary;
-    }
+    const isHighPriority = item.priority === 'high';
 
     return (
-        <View style={[styles.item, isUnread ? styles.unreadItem : styles.readItem]}>
-            <View style={[styles.iconContainer, { backgroundColor: getColor(item.type) + '20' }]}>
-                <Ionicons name={getIcon(item.type)} size={20} color={getColor(item.type)} />
-            </View>
-            <View style={{ flex: 1 }}>
-                <Text style={styles.itemTitle}>{item.title}</Text>
-                <Text style={styles.itemBody}>{item.body}</Text>
-                {item.context && <Text style={styles.contextText}>{item.context}</Text>}
-                <Text style={styles.time}>{item.timestamp}</Text>
-            </View>
-            {isUnread && <View style={styles.dot} />}
+      <Swipeable renderRightActions={(p, d) => renderRightActions(p, d, item.id)}>
+      <TouchableOpacity 
+        style={[
+            styles.item, 
+            isUnread && styles.unreadItem,
+            isHighPriority && styles.highPriorityItem
+        ]}
+        onPress={() => handlePress(item)}
+        activeOpacity={0.8}
+      >
+        {/* Avatar */}
+        <View style={styles.leftContainer}>
+             {item.avatar ? (
+                 <Image source={{ uri: item.avatar }} style={styles.avatar} />
+             ) : (
+                 <View style={[styles.iconContainer, { backgroundColor: getIconColor(item.type) + '20' }]}>
+                    <Ionicons name={getIcon(item.type)} size={20} color={getIconColor(item.type)} />
+                 </View>
+             )}
+             {/* Badge Icon Overlay */}
+             {item.avatar && (
+                 <View style={styles.miniIconBadge}>
+                      <Ionicons name={getIcon(item.type)} size={10} color="#fff" />
+                 </View>
+             )}
         </View>
+
+        {/* Content */}
+        <View style={styles.contentContainer}>
+            <View style={styles.headerRow}>
+                 <Text style={[styles.itemTitle, isUnread && styles.bold]} numberOfLines={2}>
+                     {item.title}
+                 </Text>
+                 <Text style={styles.time}>{item.timestamp}</Text>
+            </View>
+            
+            <Text style={styles.itemBody} numberOfLines={3}>
+                {item.body}
+            </Text>
+
+            {/* Rich Content: Post Image */}
+            {item.image && (
+                <Image source={{ uri: item.image }} style={styles.postThumbnail} />
+            )}
+
+            {/* Actions (Join Request) */}
+            {item.type === 'join_request' && (
+                <View style={styles.actionButtons}>
+                    <TouchableOpacity style={[styles.actionBtn, styles.acceptBtn]} onPress={() => alert('Accepted')}>
+                        <Text style={styles.acceptText}>Accept</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.actionBtn, styles.declineBtn]} onPress={() => alert('Declined')}>
+                        <Text style={styles.declineText}>Decline</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+        </View>
+        
+        {/* Unread Dot */}
+        {isUnread && <View style={styles.dot} />}
+      </TouchableOpacity>
+      </Swipeable>
     );
   };
 
-  const filteredItems = items.filter(i => {
-    if (filter === 'All') return true;
-    if (filter === 'Mentions') return i.type === 'mention' || i.title.includes('@');
-    if (filter === 'System') return ['app_status', 'skill_alert', 'reminder', 'digest'].includes(i.type);
-    return true;
-  });
+  const getIcon = (t) => {
+      if (t === 'group_like') return 'heart';
+      if (t === 'job_offer') return 'briefcase';
+      if (t === 'deadline') return 'alarm';
+      if (t === 'birthday') return 'gift';
+      if (t === 'system_alert') return 'warning';
+      if (t === 'join_request') return 'person-add';
+      return 'notifications';
+  };
+  const getIconColor = (t) => {
+      if (t === 'group_like') return '#e91e63';
+      if (t === 'job_offer') return '#ff9800'; // Gold/Orange
+      if (t === 'deadline') return '#f44336';
+      if (t === 'birthday') return '#9c27b0';
+      if (t === 'system_alert') return '#607d8b';
+      return COLORS.primary;
+  };
 
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <SafeAreaView style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Notifications</Text>
-        <TouchableOpacity>
-             <Ionicons name="settings-outline" size={24} color={COLORS.primary} />
-        </TouchableOpacity>
+        <View style={{flexDirection: 'row', gap: 16}}>
+            <TouchableOpacity onPress={markAllRead}>
+                 <Ionicons name="checkmark-done-circle-outline" size={26} color={COLORS.primary} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => alert('Settings')}>
+                 <Ionicons name="settings-outline" size={24} color={COLORS.primary} />
+            </TouchableOpacity>
+        </View>
       </View>
 
+      {/* Tabs */}
       <View style={styles.filterRow}>
-        {['All', 'Mentions', 'System'].map(f => (
+        {['All', 'Mentions', 'Requests'].map(f => (
             <TouchableOpacity 
                 key={f} 
                 style={[styles.filterChip, filter === f && styles.filterChipActive]}
@@ -176,12 +288,23 @@ export default function NotificationsScreen() {
         ))}
       </View>
 
-      <FlatList
-        data={filteredItems}
-        keyExtractor={(it, idx) => it.id || String(idx)}
+      {/* List */}
+      <SectionList
+        sections={sections}
+        keyExtractor={(item, index) => item.id + index}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => fetchNotifications(uid)} />}
-        contentContainerStyle={{ padding: SPACING.m, paddingBottom: 100 }}
         renderItem={({ item }) => <NotificationCard item={item} />}
+        renderSectionHeader={renderSectionHeader}
+        contentContainerStyle={{ paddingBottom: 100 }}
+        stickySectionHeadersEnabled={false}
+        ListFooterComponent={
+            <View style={styles.footer}>
+                <TouchableOpacity onPress={() => alert('Manage Push Settings')}>
+                    <Text style={styles.footerLink}>Manage settings</Text>
+                </TouchableOpacity>
+                <Text style={styles.footerText}>That's all for now!</Text>
+            </View>
+        }
         ListEmptyComponent={
             <View style={styles.empty}>
                 <Ionicons name="notifications-off-outline" size={48} color="#ccc" />
@@ -190,6 +313,7 @@ export default function NotificationsScreen() {
         }
       />
     </SafeAreaView>
+    </GestureHandlerRootView>
   );
 }
 
@@ -220,94 +344,115 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0f0',
     marginRight: 8,
   },
-  filterChipActive: {
-    backgroundColor: COLORS.primary,
-  },
+  filterChipActive: { backgroundColor: COLORS.primary },
   filterText: { fontWeight: '600', color: '#666' },
   filterTextActive: { color: 'white' },
   
+  sectionHeader: {
+      paddingHorizontal: SPACING.m,
+      paddingVertical: 8,
+      backgroundColor: '#f8f9fa',
+  },
+  sectionTitle: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: COLORS.text.secondary,
+      textTransform: 'uppercase',
+  },
+
+  // Item
   item:{
     flexDirection: 'row',
     padding: SPACING.m,
     backgroundColor: 'white',
-    borderRadius: 12, // More rounded
-    marginBottom: SPACING.s,
-    alignItems: 'center',
-    ...SHADOWS.small,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
   unreadItem: {
-    backgroundColor: '#fff',
-    borderLeftWidth: 3,
-    borderLeftColor: COLORS.primary,
+    backgroundColor: '#f0f7ff', // Very light blue
   },
-  unreadBorder: {
+  highPriorityItem: {
+      backgroundColor: '#fff8e1', // Light gold/amber
       borderLeftWidth: 3,
-      borderLeftColor: COLORS.primary,
+      borderLeftColor: '#ff9800',
   },
-  readItem: {
-    opacity: 0.9,
-    backgroundColor: '#fcfcfc',
-  },
+  leftContainer: { marginRight: 12, position: 'relative' },
+  avatar: { width: 44, height: 44, borderRadius: 22 },
   iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: SPACING.m,
   },
-  itemTitle:{fontWeight:'bold', fontSize: 15, color: COLORS.text.primary},
-  itemBody:{color:'#555', marginTop: 2, fontSize: 13, lineHeight: 18},
-  time:{color:'#999',fontSize:11,marginTop:4},
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: COLORS.secondary,
-    marginLeft: 8,
+  miniIconBadge: {
+      position: 'absolute',
+      bottom: -2,
+      right: -2,
+      backgroundColor: COLORS.primary,
+      width: 16,
+      height: 16,
+      borderRadius: 8,
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: '#fff'
   },
-  contextText: {
-      fontSize: 11,
-      color: COLORS.primary,
-      marginTop: 2,
-      fontWeight: '500',
+  contentContainer: { flex: 1 },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 },
+  itemTitle: { fontSize: 14, color: COLORS.text.primary },
+  bold: { fontWeight: 'bold' },
+  time: { fontSize: 11, color: COLORS.text.tertiary, marginLeft: 8 },
+  itemBody: { fontSize: 13, color: COLORS.text.secondary, lineHeight: 18 },
+  
+  // Rich Content
+  postThumbnail: {
+      width: '100%',
+      height: 120,
+      borderRadius: 8,
+      marginTop: 8,
+      resizeMode: 'cover',
   },
   
-  // Action Item Styles
-  actionItem: {
-      flexDirection: 'column',
-      alignItems: 'flex-start',
-  },
-  row: { flexDirection: 'row', width: '100%', alignItems: 'center' },
+  // Actions
   actionButtons: {
       flexDirection: 'row',
-      marginTop: 12,
-      marginLeft: 56, // Align with text
+      marginTop: 8,
       gap: 10,
   },
   actionBtn: {
       paddingHorizontal: 16,
-      paddingVertical: 8,
-      borderRadius: 8,
+      paddingVertical: 6,
+      borderRadius: 6,
   },
   acceptBtn: { backgroundColor: COLORS.primary },
-  declineBtn: { backgroundColor: '#ffebee', borderWidth: 1, borderColor: '#ffcdd2' },
-  acceptText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
-  declineText: { color: '#d32f2f', fontWeight: 'bold', fontSize: 13 },
+  declineBtn: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd' },
+  acceptText: { color: '#fff', fontWeight: 'bold', fontSize: 12 },
+  declineText: { color: COLORS.text.secondary, fontWeight: 'bold', fontSize: 12 },
 
-  // Digest styles
-  digestItem: {
-      padding: 0,
-      overflow: 'hidden',
+  // Dot
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.primary,
+    marginLeft: 8,
+    marginTop: 6,
   },
-  digestGradient: {
-      flexDirection: 'row',
-      padding: SPACING.m,
-      width: '100%',
+
+  // Swipe Action
+  deleteAction: {
+      backgroundColor: '#ff5252',
+      justifyContent: 'center',
       alignItems: 'center',
+      width: 80,
+      height: '100%',
   },
-  digestTitle: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-  digestBody: { color: 'rgba(255,255,255,0.9)', fontSize: 13 },
+
+  // Footer
+  footer: { padding: 24, alignItems: 'center' },
+  footerLink: { color: COLORS.primary, fontWeight: '600', marginBottom: 8 },
+  footerText: { color: COLORS.text.tertiary, fontSize: 12 },
 
   empty: { alignItems: 'center', marginTop: 100 },
   emptyText: { color: '#999', marginTop: 10, fontSize: 16 },
