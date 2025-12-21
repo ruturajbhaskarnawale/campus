@@ -12,18 +12,22 @@ import {
   Alert,
   useWindowDimensions,
   Animated,
-  Dimensions
+  Dimensions,
+  Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import client from '../../../core/api/client';
 import { getCurrentUserId } from '../../../core/auth';
-import { COLORS, SPACING, FONTS, RADIUS, SHADOWS } from '../../../core/design/Theme';
+import { SPACING, FONTS, RADIUS, SHADOWS } from '../../../core/design/Theme';
+import { useTheme } from '../../../core/contexts/ThemeContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function SearchScreen({ navigation }) {
+  const { colors, isDark } = useTheme();
   // State Management
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('all');
@@ -35,7 +39,11 @@ export default function SearchScreen({ navigation }) {
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
     skills: [],
-    sortBy: 'relevance'
+    sortBy: 'relevance',
+    universityYear: null,
+    department: null,
+    datePosted: null,
+    saveSearch: false
   });
   const [selectedItems, setSelectedItems] = useState([]);
   const [searchTime, setSearchTime] = useState(0);
@@ -106,7 +114,9 @@ export default function SearchScreen({ navigation }) {
         q: query,
         type: activeTab,
         skills: filters.skills.join(','),
-        sort: filters.sortBy
+        sort: filters.sortBy,
+        year: filters.universityYear,
+        dept: filters.department
       };
       
       const response = await client.get('/search/unified', { params });
@@ -138,9 +148,9 @@ export default function SearchScreen({ navigation }) {
   };
 
   // Recent Searches
-  const loadRecentSearches = () => {
+  const loadRecentSearches = async () => {
     try {
-      const stored = localStorage.getItem('recentSearches');
+      const stored = await AsyncStorage.getItem('recentSearches');
       if (stored) {
         setRecentSearches(JSON.parse(stored));
       }
@@ -149,22 +159,24 @@ export default function SearchScreen({ navigation }) {
     }
   };
 
-  const saveToRecentSearches = (query) => {
+  const saveToRecentSearches = async (query) => {
     try {
       let recent = [...recentSearches];
       recent = recent.filter(q => q !== query);
       recent.unshift(query);
       recent = recent.slice(0, 10);
       setRecentSearches(recent);
-      localStorage.setItem('recentSearches', JSON.stringify(recent));
+      await AsyncStorage.setItem('recentSearches', JSON.stringify(recent));
     } catch (error) {
       console.error('Save recent search error:', error);
     }
   };
 
-  const clearRecentSearches = () => {
-    setRecentSearches([]);
-    localStorage.removeItem('recentSearches');
+  const clearRecentSearches = async () => {
+    try {
+        setRecentSearches([]);
+        await AsyncStorage.removeItem('recentSearches');
+    } catch (e) {}
   };
 
   // Trending Searches
@@ -202,7 +214,7 @@ export default function SearchScreen({ navigation }) {
   const renderMatchScore = (score) => {
     if (!score) return null;
     
-    const color = score >= 70 ? COLORS.success : score >= 40 ? COLORS.warning : COLORS.error;
+    const color = score >= 70 ? colors.success || '#4caf50' : score >= 40 ? colors.warning || '#ff9800' : colors.error || '#f44336';
     
     return (
       <View style={[styles.matchBadge, { backgroundColor: color + '20', borderColor: color }]}>
@@ -216,25 +228,25 @@ export default function SearchScreen({ navigation }) {
   const renderSearchBar = () => (
     <View style={styles.searchBarContainer}>
       <LinearGradient
-        colors={[COLORS.primary, COLORS.secondary]}
+        colors={[colors.primary, colors.secondary || colors.primary]}
         style={styles.searchGradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
       >
         <View style={styles.searchInputWrapper}>
-          <Ionicons name="search" size={22} color={COLORS.text.secondary} />
+          <Ionicons name="search" size={22} color={colors.text.secondary} />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: colors.text.primary }]}
             placeholder="Search users, projects, or posts..."
             value={searchQuery}
             onChangeText={handleSearchInput}
-            placeholderTextColor={COLORS.text.tertiary}
+            placeholderTextColor={colors.text.tertiary}
             autoCapitalize="none"
             autoCorrect={false}
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={22} color={COLORS.text.secondary} />
+              <Ionicons name="close-circle" size={22} color={colors.text.secondary} />
             </TouchableOpacity>
           )}
         </View>
@@ -259,7 +271,7 @@ export default function SearchScreen({ navigation }) {
     if (suggestions.length === 0 || !searchQuery) return null;
     
     return (
-      <Animated.View style={[styles.suggestionsContainer, { opacity: fadeAnim }]}>
+      <Animated.View style={[styles.suggestionsContainer, { opacity: fadeAnim, backgroundColor: colors.background.secondary }]}>
         {suggestions.map((suggestion, index) => (
           <TouchableOpacity
             key={index}
@@ -271,9 +283,9 @@ export default function SearchScreen({ navigation }) {
             }}
             activeOpacity={0.7}
           >
-            <Ionicons name="search" size={16} color={COLORS.primary} />
-            <Text style={styles.suggestionText}>{suggestion}</Text>
-            <Ionicons name="arrow-forward" size={14} color={COLORS.text.tertiary} style={{ marginLeft: 'auto' }} />
+            <Ionicons name="search" size={16} color={colors.primary} />
+            <Text style={[styles.suggestionText, { color: colors.text.primary }]}>{suggestion}</Text>
+            <Ionicons name="arrow-forward" size={14} color={colors.text.tertiary} style={{ marginLeft: 'auto' }} />
           </TouchableOpacity>
         ))}
       </Animated.View>
@@ -281,7 +293,6 @@ export default function SearchScreen({ navigation }) {
   };
 
   // Render Tabs
-  // Render Tabs (Pills)
   const renderTabs = () => {
     const tabs = [
       { id: 'all', label: 'All' },
@@ -301,14 +312,22 @@ export default function SearchScreen({ navigation }) {
           {tabs.map(item => (
             <TouchableOpacity
               key={item.id}
-              style={[styles.tab, activeTab === item.id && styles.activeTab]}
+              style={[
+                  styles.tab, 
+                  { backgroundColor: colors.background.tertiary },
+                  activeTab === item.id && { backgroundColor: isDark ? colors.primary + '20' : '#e3f2fd', borderColor: colors.primary }
+              ]}
               onPress={() => {
                 setActiveTab(item.id);
                 if (searchQuery) performSearch(searchQuery);
               }}
               activeOpacity={0.7}
             >
-              <Text style={[styles.tabText, activeTab === item.id && styles.activeTabText]}>
+              <Text style={[
+                  styles.tabText, 
+                  { color: colors.text.secondary },
+                  activeTab === item.id && { color: colors.primary, fontWeight: '700' }
+              ]}>
                 {item.label}
               </Text>
             </TouchableOpacity>
@@ -323,23 +342,23 @@ export default function SearchScreen({ navigation }) {
     if (!showFilters) return null;
     
     return (
-      <Animated.View style={[styles.filtersPanel, { opacity: fadeAnim }]}>
+      <Animated.View style={[styles.filtersPanel, { opacity: fadeAnim, backgroundColor: colors.background.secondary }]}>
         <View style={styles.filterHeader}>
-          <Text style={styles.filterTitle}>Advanced Filters</Text>
+          <Text style={[styles.filterTitle, { color: colors.text.primary }]}>Advanced Filters</Text>
           <TouchableOpacity onPress={() => setShowFilters(false)}>
-            <Ionicons name="close" size={24} color={COLORS.text.primary} />
+            <Ionicons name="close" size={24} color={colors.text.primary} />
           </TouchableOpacity>
         </View>
 
         <ScrollView style={{ maxHeight: 400 }}>
             {/* Skills Filter */}
             <View style={styles.filterSection}>
-              <Text style={styles.filterLabel}>Skills</Text>
-              <View style={styles.skillsInput}>
+              <Text style={[styles.filterLabel, { color: colors.text.secondary }]}>Skills</Text>
+              <View style={[styles.skillsInput, { backgroundColor: colors.background.tertiary }]}>
                 <TextInput
-                  style={styles.filterInput}
+                  style={[styles.filterInput, { color: colors.text.primary }]}
                   placeholder="e.g. React, Python..."
-                  placeholderTextColor={COLORS.text.tertiary}
+                  placeholderTextColor={colors.text.tertiary}
                   onSubmitEditing={(e) => {
                     const skill = e.nativeEvent.text.trim();
                     if (skill && !filters.skills.includes(skill)) {
@@ -351,8 +370,12 @@ export default function SearchScreen({ navigation }) {
               </View>
               <View style={styles.skillTags}>
                 {filters.skills.map((skill, index) => (
-                  <TouchableOpacity key={index} style={styles.skillTag} onPress={() => setFilters({...filters, skills: filters.skills.filter(s => s !== skill)})}>
-                     <Text style={styles.skillTagText}>{skill} ×</Text>
+                  <TouchableOpacity 
+                    key={index} 
+                    style={[styles.skillTag, { backgroundColor: colors.primary + '15' }]} 
+                    onPress={() => setFilters({...filters, skills: filters.skills.filter(s => s !== skill)})}
+                  >
+                     <Text style={[styles.skillTagText, { color: colors.primary }]}>{skill} ×</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -360,15 +383,23 @@ export default function SearchScreen({ navigation }) {
 
             {/* University Year */}
             <View style={styles.filterSection}>
-                <Text style={styles.filterLabel}>University Year</Text>
+                <Text style={[styles.filterLabel, { color: colors.text.secondary }]}>University Year</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap: 8}}>
                     {['1st Year', '2nd Year', '3rd Year', '4th Year', 'Grad'].map(year => (
                         <TouchableOpacity 
                             key={year} 
-                            style={[styles.filterChip, filters.universityYear === year && styles.filterChipActive]}
+                            style={[
+                                styles.filterChip, 
+                                { backgroundColor: colors.background.tertiary },
+                                filters.universityYear === year && { backgroundColor: isDark ? colors.primary + '20' : '#e3f2fd' }
+                            ]}
                             onPress={() => setFilters({...filters, universityYear: filters.universityYear === year ? null : year})}
                         >
-                            <Text style={[styles.filterChipText, filters.universityYear === year && styles.filterChipTextActive]}>{year}</Text>
+                            <Text style={[
+                                styles.filterChipText, 
+                                { color: colors.text.primary },
+                                filters.universityYear === year && { color: colors.primary, fontWeight: '600' }
+                            ]}>{year}</Text>
                         </TouchableOpacity>
                     ))}
                 </ScrollView>
@@ -376,15 +407,23 @@ export default function SearchScreen({ navigation }) {
 
             {/* Department */}
             <View style={styles.filterSection}>
-                <Text style={styles.filterLabel}>Department</Text>
+                <Text style={[styles.filterLabel, { color: colors.text.secondary }]}>Department</Text>
                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap: 8}}>
                     {['CS', 'IT', 'E&TC', 'Mech', 'Civil', 'AI&DS'].map(dept => (
                         <TouchableOpacity 
                             key={dept} 
-                            style={[styles.filterChip, filters.department === dept && styles.filterChipActive]}
+                            style={[
+                                styles.filterChip, 
+                                { backgroundColor: colors.background.tertiary },
+                                filters.department === dept && { backgroundColor: isDark ? colors.primary + '20' : '#e3f2fd' }
+                            ]}
                             onPress={() => setFilters({...filters, department: filters.department === dept ? null : dept})}
                         >
-                            <Text style={[styles.filterChipText, filters.department === dept && styles.filterChipTextActive]}>{dept}</Text>
+                            <Text style={[
+                                styles.filterChipText, 
+                                { color: colors.text.primary },
+                                filters.department === dept && { color: colors.primary, fontWeight: '600' }
+                            ]}>{dept}</Text>
                         </TouchableOpacity>
                     ))}
                 </ScrollView>
@@ -392,15 +431,23 @@ export default function SearchScreen({ navigation }) {
 
             {/* Date Posted */}
             <View style={styles.filterSection}>
-                <Text style={styles.filterLabel}>Date Posted</Text>
+                <Text style={[styles.filterLabel, { color: colors.text.secondary }]}>Date Posted</Text>
                 <View style={styles.sortOptions}>
                     {['Any Time', 'Past 24h', 'Past Week', 'Past Month'].map(date => (
                         <TouchableOpacity 
                             key={date} 
-                            style={[styles.sortOption, filters.datePosted === date && styles.sortOptionActive]}
+                            style={[
+                                styles.sortOption, 
+                                { backgroundColor: colors.background.tertiary },
+                                filters.datePosted === date && { backgroundColor: isDark ? colors.primary + '20' : '#e3f2fd', borderColor: colors.primary }
+                            ]}
                             onPress={() => setFilters({...filters, datePosted: date})}
                         >
-                            <Text style={[styles.sortOptionText, filters.datePosted === date && styles.sortOptionTextActive]}>{date}</Text>
+                            <Text style={[
+                                styles.sortOptionText, 
+                                { color: colors.text.secondary },
+                                filters.datePosted === date && { color: colors.primary, fontWeight: '600' }
+                            ]}>{date}</Text>
                         </TouchableOpacity>
                     ))}
                 </View>
@@ -408,20 +455,22 @@ export default function SearchScreen({ navigation }) {
             
             {/* Sort Options */}
             <View style={styles.filterSection}>
-              <Text style={styles.filterLabel}>Sort By</Text>
+              <Text style={[styles.filterLabel, { color: colors.text.secondary }]}>Sort By</Text>
               <View style={styles.sortOptions}>
                 {['relevance', 'recent', 'popular'].map(sort => (
                   <TouchableOpacity
                     key={sort}
                     style={[
                       styles.sortOption,
-                      filters.sortBy === sort && styles.sortOptionActive
+                      { backgroundColor: colors.background.tertiary },
+                      filters.sortBy === sort && { backgroundColor: isDark ? colors.primary + '20' : '#e3f2fd', borderColor: colors.primary }
                     ]}
                     onPress={() => setFilters({ ...filters, sortBy: sort })}
                   >
                     <Text style={[
                       styles.sortOptionText,
-                      filters.sortBy === sort && styles.sortOptionTextActive
+                      { color: colors.text.secondary },
+                      filters.sortBy === sort && { color: colors.primary, fontWeight: '600' }
                     ]}>
                       {sort.charAt(0).toUpperCase() + sort.slice(1)}
                     </Text>
@@ -432,9 +481,9 @@ export default function SearchScreen({ navigation }) {
 
             {/* Save Search Toggle */}
             <View style={styles.saveSearchRow}>
-                <Text style={styles.saveSearchText}>Alert me for new results</Text>
+                <Text style={[styles.saveSearchText, { color: colors.text.primary }]}>Alert me for new results</Text>
                 <TouchableOpacity onPress={() => setFilters({...filters, saveSearch: !filters.saveSearch})}>
-                    <Ionicons name={filters.saveSearch ? "toggle" : "toggle-outline"} size={32} color={filters.saveSearch ? COLORS.primary : COLORS.text.tertiary} />
+                    <Ionicons name={filters.saveSearch ? "toggle" : "toggle-outline"} size={32} color={filters.saveSearch ? colors.primary : colors.text.tertiary} />
                 </TouchableOpacity>
             </View>
         </ScrollView>
@@ -448,7 +497,7 @@ export default function SearchScreen({ navigation }) {
           activeOpacity={0.9}
         >
           <LinearGradient
-            colors={[COLORS.primary, COLORS.secondary]}
+            colors={[colors.primary, colors.secondary || colors.primary]}
             style={styles.gradientButton}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
@@ -468,7 +517,9 @@ export default function SearchScreen({ navigation }) {
         styles.resultCard,
         {
           opacity: fadeAnim,
-          transform: [{ translateY: slideAnim }]
+          transform: [{ translateY: slideAnim }],
+          backgroundColor: colors.background.card,
+          borderColor: colors.border
         }
       ]}
     >
@@ -484,16 +535,16 @@ export default function SearchScreen({ navigation }) {
           />
           <View style={styles.cardMainInfo}>
             <View style={styles.nameRow}>
-              <Text style={styles.userNameTitle}>{item.name}</Text>
+              <Text style={[styles.userNameTitle, { color: colors.text.primary }]}>{item.name}</Text>
               {item.online && <View style={styles.onlineBadge} />}
             </View>
-            <Text style={styles.userRoleText} numberOfLines={1}>{item.bio || 'Ready to collaborate'}</Text>
+            <Text style={[styles.userRoleText, { color: colors.text.secondary }]} numberOfLines={1}>{item.bio || 'Ready to collaborate'}</Text>
             <View style={styles.miniStatsRow}>
-              <Ionicons name="people-outline" size={12} color={COLORS.text.tertiary} />
-              <Text style={styles.miniStatText}>{item.followersCount || 0} followers</Text>
+              <Ionicons name="people-outline" size={12} color={colors.text.tertiary} />
+              <Text style={[styles.miniStatText, { color: colors.text.tertiary }]}>{item.followersCount || 0} followers</Text>
               <View style={styles.dotSeparator} />
-              <Ionicons name="star-outline" size={12} color={COLORS.text.tertiary} />
-              <Text style={styles.miniStatText}>{item.xp || 0} XP</Text>
+              <Ionicons name="star-outline" size={12} color={colors.text.tertiary} />
+              <Text style={[styles.miniStatText, { color: colors.text.tertiary }]}>{item.xp || 0} XP</Text>
             </View>
           </View>
           {renderMatchScore(item.matchScore)}
@@ -502,28 +553,28 @@ export default function SearchScreen({ navigation }) {
         {item.skills && item.skills.length > 0 && (
           <View style={styles.skillTagsRow}>
             {item.skills.slice(0, 3).map((skill, idx) => (
-              <View key={idx} style={styles.skillTagSmall}>
-                <Text style={styles.skillTagTextSmall}>{skill}</Text>
+              <View key={idx} style={[styles.skillTagSmall, { backgroundColor: colors.background.tertiary }]}>
+                <Text style={[styles.skillTagTextSmall, { color: colors.text.secondary }]}>{skill}</Text>
               </View>
             ))}
             {item.skills.length > 3 && (
-              <Text style={styles.moreSkillsText}>+{item.skills.length - 3}</Text>
+              <Text style={[styles.moreSkillsText, { color: colors.text.tertiary }]}>+{item.skills.length - 3}</Text>
             )}
           </View>
         )}
 
         <View style={styles.cardActionRow}>
           <TouchableOpacity 
-            style={[styles.actionBtn, styles.actionBtnPrimary]} 
+            style={[styles.actionBtn, styles.actionBtnPrimary, { backgroundColor: colors.primary }]} 
             onPress={() => handleFollow(item.uid)}
           >
             <Text style={styles.actionBtnTextPrimary}>Connect</Text>
           </TouchableOpacity>
           <TouchableOpacity 
-            style={[styles.actionBtn, styles.actionBtnSecondary]} 
+            style={[styles.actionBtn, styles.actionBtnSecondary, { backgroundColor: colors.background.tertiary }]} 
             onPress={() => handleMessage(item.uid, item.name)}
           >
-            <Ionicons name="chatbubble-outline" size={18} color={COLORS.text.primary} />
+            <Ionicons name="chatbubble-outline" size={18} color={colors.text.primary} />
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -537,7 +588,9 @@ export default function SearchScreen({ navigation }) {
         styles.resultCard,
         {
           opacity: fadeAnim,
-          transform: [{ translateY: slideAnim }]
+          transform: [{ translateY: slideAnim }],
+          backgroundColor: colors.background.card,
+          borderColor: colors.border
         }
       ]}
     >
@@ -547,31 +600,31 @@ export default function SearchScreen({ navigation }) {
         activeOpacity={0.9}
       >
         <View style={styles.projectHeaderRow}>
-          <View style={styles.projectIconPlaceholder}>
-            <Ionicons name="rocket-outline" size={24} color={COLORS.primary} />
+          <View style={[styles.projectIconPlaceholder, { backgroundColor: colors.primary + '15' }]}>
+            <Ionicons name="rocket-outline" size={24} color={colors.primary} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.projectTitleText} numberOfLines={1}>{item.title}</Text>
-            <Text style={styles.projectAuthorText}>by {item.authorName || 'Unknown'}</Text>
+            <Text style={[styles.projectTitleText, { color: colors.text.primary }]} numberOfLines={1}>{item.title}</Text>
+            <Text style={[styles.projectAuthorText, { color: colors.text.tertiary }]}>by {item.authorName || 'Unknown'}</Text>
           </View>
           {renderMatchScore(item.matchScore)}
         </View>
 
-        <Text style={styles.projectDescText} numberOfLines={2}>{item.description}</Text>
+        <Text style={[styles.projectDescText, { color: colors.text.secondary }]} numberOfLines={2}>{item.description}</Text>
 
         <View style={styles.projectFooterRow}>
-          <View style={styles.projectStatBadge}>
-            <Ionicons name="people" size={12} color={COLORS.primary} />
-            <Text style={styles.projectStatText}>{item.team_size || 0}/{item.max_team_size || 5}</Text>
+          <View style={[styles.projectStatBadge, { backgroundColor: colors.background.tertiary }]}>
+            <Ionicons name="people" size={12} color={colors.primary} />
+            <Text style={[styles.projectStatText, { color: colors.text.primary }]}>{item.team_size || 0}/{item.max_team_size || 5}</Text>
           </View>
-          <View style={styles.projectStatBadge}>
-            <Ionicons name="heart" size={12} color={COLORS.error} />
-            <Text style={styles.projectStatText}>{item.likes || 0}</Text>
+          <View style={[styles.projectStatBadge, { backgroundColor: colors.background.tertiary }]}>
+            <Ionicons name="heart" size={12} color={colors.error || '#f44336'} />
+            <Text style={[styles.projectStatText, { color: colors.text.primary }]}>{item.likes || 0}</Text>
           </View>
           <View style={{ flex: 1 }} />
           <View style={styles.viewDetailsBtn}>
-            <Text style={styles.viewDetailsText}>View</Text>
-            <Ionicons name="arrow-forward" size={12} color={COLORS.primary} />
+            <Text style={[styles.viewDetailsText, { color: colors.primary }]}>View</Text>
+            <Ionicons name="arrow-forward" size={12} color={colors.primary} />
           </View>
         </View>
       </TouchableOpacity>
@@ -584,7 +637,7 @@ export default function SearchScreen({ navigation }) {
     
     return (
       <View style={styles.searchStats}>
-         <Text style={styles.searchStatsSimpleText}>
+         <Text style={[styles.searchStatsSimpleText, { color: colors.text.tertiary }]}>
             Found {results.total} results in {searchTime}ms
          </Text>
       </View>
@@ -603,35 +656,35 @@ export default function SearchScreen({ navigation }) {
           showsVerticalScrollIndicator={false}
         >
           <LinearGradient
-            colors={[COLORS.primary + '20', COLORS.secondary + '20']}
+            colors={[colors.primary + '20', colors.secondary + '20']}
             style={styles.emptyIconContainer}
           >
-            <Ionicons name="search" size={48} color={COLORS.primary} />
+            <Ionicons name="search" size={48} color={colors.primary} />
           </LinearGradient>
-          <Text style={styles.emptyTitle}>Discover Amazing Projects</Text>
-          <Text style={styles.emptyText}>Search for users, projects, and collaborate!</Text>
+          <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>Discover Amazing Projects</Text>
+          <Text style={[styles.emptyText, { color: colors.text.secondary }]}>Search for users, projects, and collaborate!</Text>
           
           {/* Recent Searches */}
           {recentSearches.length > 0 && (
             <View style={styles.recentSection}>
               <View style={styles.recentHeader}>
-                <Text style={styles.sectionTitle}>Recent Searches</Text>
+                <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Recent Searches</Text>
                 <TouchableOpacity onPress={clearRecentSearches}>
-                  <Text style={styles.clearText}>Clear</Text>
+                  <Text style={[styles.clearText, { color: colors.primary }]}>Clear</Text>
                 </TouchableOpacity>
               </View>
               {recentSearches.slice(0, 5).map((query, index) => (
                 <TouchableOpacity
                   key={index}
-                  style={styles.recentItem}
+                  style={[styles.recentItem, { backgroundColor: colors.background.card }]}
                   onPress={() => {
                     setSearchQuery(query);
                     performSearch(query);
                   }}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="time-outline" size={18} color={COLORS.text.secondary} />
-                  <Text style={styles.recentText}>{query}</Text>
+                  <Ionicons name="time-outline" size={18} color={colors.text.secondary} />
+                  <Text style={[styles.recentText, { color: colors.text.primary }]}>{query}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -642,17 +695,17 @@ export default function SearchScreen({ navigation }) {
             <View style={styles.trendingSection}>
               <View style={styles.trendingHeader}>
                 <LinearGradient
-                  colors={[COLORS.warning, COLORS.error]}
+                  colors={[colors.warning || '#ff9800', colors.error || '#f44336']}
                   style={styles.trendingIcon}
                 >
                   <Ionicons name="flame" size={20} color="#FFF" />
                 </LinearGradient>
-                <Text style={styles.sectionTitle}>Trending Now</Text>
+                <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Trending Now</Text>
               </View>
               {trending.slice(0, 5).map((item, index) => (
                 <TouchableOpacity
                   key={index}
-                  style={styles.trendingItem}
+                  style={[styles.trendingItem, { backgroundColor: colors.background.card }]}
                   onPress={() => {
                     setSearchQuery(item.query);
                     performSearch(item.query);
@@ -660,13 +713,13 @@ export default function SearchScreen({ navigation }) {
                   activeOpacity={0.7}
                 >
                   <LinearGradient
-                    colors={[COLORS.primary + '20', COLORS.secondary + '20']}
+                    colors={[colors.primary + '20', colors.secondary + '20']}
                     style={styles.trendingRank}
                   >
-                    <Text style={styles.trendingRankText}>#{index + 1}</Text>
+                    <Text style={[styles.trendingRankText, { color: colors.primary }]}>#{index + 1}</Text>
                   </LinearGradient>
-                  <Text style={styles.trendingText}>{item.query}</Text>
-                  <Text style={styles.trendingCount}>{item.count} searches</Text>
+                  <Text style={[styles.trendingText, { color: colors.text.primary }]}>{item.query}</Text>
+                  <Text style={[styles.trendingCount, { color: colors.text.tertiary }]}>{item.count} searches</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -679,13 +732,13 @@ export default function SearchScreen({ navigation }) {
       return (
         <View style={styles.emptyContainer}>
           <LinearGradient
-            colors={[COLORS.text.tertiary + '20', COLORS.text.tertiary + '10']}
+            colors={[colors.text.tertiary + '20', colors.text.tertiary + '10']}
             style={styles.emptyIconContainer}
           >
-            <Ionicons name="search-outline" size={48} color={COLORS.text.tertiary} />
+            <Ionicons name="search-outline" size={48} color={colors.text.tertiary} />
           </LinearGradient>
-          <Text style={styles.emptyTitle}>No Results Found</Text>
-          <Text style={styles.emptyText}>Try different keywords or adjust your filters</Text>
+          <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>No Results Found</Text>
+          <Text style={[styles.emptyText, { color: colors.text.secondary }]}>Try different keywords or adjust your filters</Text>
         </View>
       );
     }
@@ -698,8 +751,8 @@ export default function SearchScreen({ navigation }) {
     if (loading) {
       return (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Searching...</Text>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.text.secondary }]}>Searching...</Text>
         </View>
       );
     }
@@ -729,7 +782,7 @@ export default function SearchScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background.primary }]} edges={['top']}>
       {renderSearchBar()}
       {renderSuggestions()}
       {renderTabs()}
@@ -743,20 +796,19 @@ export default function SearchScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background.primary,
   },
   
   // Search Bar
   searchBarContainer: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.m,
+    paddingVertical: SPACING.s,
   },
   searchGradient: {
     borderRadius: RADIUS.lg,
-    padding: SPACING.sm,
+    padding: SPACING.s,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.sm,
+    gap: SPACING.s,
     ...SHADOWS.medium,
   },
   searchInputWrapper: {
@@ -764,20 +816,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.95)',
-    borderRadius: RADIUS.md,
-    paddingHorizontal: SPACING.md,
+    borderRadius: RADIUS.m,
+    paddingHorizontal: SPACING.m,
     height: 44,
-    gap: SPACING.sm,
+    gap: SPACING.s,
   },
   searchInput: {
     flex: 1,
     fontSize: FONTS.md,
-    color: COLORS.text.primary,
   },
   filterButton: {
     width: 44,
     height: 44,
-    borderRadius: RADIUS.md,
+    borderRadius: RADIUS.m,
     overflow: 'hidden',
   },
   filterButtonGradient: {
@@ -789,548 +840,160 @@ const styles = StyleSheet.create({
   
   // Suggestions
   suggestionsContainer: {
-    marginHorizontal: SPACING.md,
-    backgroundColor: COLORS.background.secondary,
+    marginHorizontal: SPACING.m,
     borderRadius: RADIUS.lg,
-    marginTop: SPACING.sm,
+    marginTop: SPACING.s,
     ...SHADOWS.large,
     maxHeight: 250,
   },
   suggestionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: SPACING.md,
-    gap: SPACING.sm,
+    padding: SPACING.m,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border + '30',
+    borderBottomColor: 'rgba(0,0,0,0.05)',
   },
   suggestionText: {
-    flex: 1,
-    fontSize: FONTS.md,
-    color: COLORS.text.primary,
-    fontWeight: '500',
+    marginLeft: SPACING.m,
+    fontSize: 14,
   },
   
   // Tabs
   tabsContainer: {
-    marginTop: SPACING.sm,
-    marginBottom: SPACING.sm,
+    marginTop: SPACING.s,
+    maxHeight: 50,
   },
   tabsContent: {
-    paddingHorizontal: SPACING.md,
-    gap: SPACING.sm,
-    paddingRight: SPACING.xl, // Ensure last item is reachable
+    paddingHorizontal: SPACING.m,
+    paddingVertical: 5,
+    gap: SPACING.s,
   },
   tab: {
-    paddingHorizontal: 20, // Fixed pixel for control
+    paddingHorizontal: 20,
     paddingVertical: 8,
-    borderRadius: RADIUS.full,
-    backgroundColor: COLORS.background.secondary,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-    minWidth: 80,
-  },
-  activeTab: {
     borderColor: 'transparent',
-    backgroundColor: COLORS.primary, // Callback to theme
   },
   tabText: {
-    fontSize: FONTS.sm,
-    color: COLORS.text.secondary,
-    fontWeight: '600',
-    position: 'relative',
-    zIndex: 1,
-  },
-  activeTabText: {
-    color: '#FFF',
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '500',
   },
   
   // Filters Panel
   filtersPanel: {
-    backgroundColor: COLORS.background.secondary,
-    margin: SPACING.md,
-    borderRadius: RADIUS.lg,
-    padding: SPACING.lg,
+    position: 'absolute',
+    top: 70, // Below header
+    left: 20,
+    right: 20,
+    borderRadius: RADIUS.ls,
+    padding: SPACING.m,
+    zIndex: 100,
     ...SHADOWS.large,
   },
   filterHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.m,
   },
   filterTitle: {
-    fontSize: FONTS.xl,
-    fontWeight: '700',
-    color: COLORS.text.primary,
+    fontSize: 18,
+    fontWeight: 'bold',
   },
   filterSection: {
-    marginBottom: SPACING.lg,
+    marginBottom: SPACING.m,
   },
   filterLabel: {
-    fontSize: FONTS.sm,
-    color: COLORS.text.secondary,
-    marginBottom: SPACING.sm,
+    fontSize: 14,
     fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    marginBottom: 8,
   },
-  filterInput: {
-    backgroundColor: COLORS.background.primary,
-    borderRadius: RADIUS.md,
-    padding: SPACING.md,
-    fontSize: FONTS.md,
-    color: COLORS.text.primary,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  skillTags: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING.sm,
-    marginTop: SPACING.sm,
-  },
-  skillTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: RADIUS.full,
-    gap: SPACING.xs,
-    overflow: 'hidden',
-  },
-  skillTagText: {
-    fontSize: FONTS.sm,
-    color: COLORS.primary,
-    fontWeight: '600',
-    position: 'relative',
-    zIndex: 1,
-  },
-  sortOptions: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-  },
-  sortOption: {
-    flex: 1,
-    paddingVertical: SPACING.md,
-    borderRadius: RADIUS.md,
-    alignItems: 'center',
-    backgroundColor: COLORS.background.primary,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    overflow: 'hidden',
-  },
-  sortOptionActive: {
-    borderColor: 'transparent',
-  },
-  sortOptionText: {
-    fontSize: FONTS.sm,
-    color: COLORS.text.secondary,
-    fontWeight: '600',
-    position: 'relative',
-    zIndex: 1,
-  },
-  sortOptionTextActive: {
-    color: '#FFF',
-  },
-  applyFiltersButton: {
-    marginTop: SPACING.md,
-    borderRadius: RADIUS.md,
-    overflow: 'hidden',
-    ...SHADOWS.medium,
-  },
-  gradientButton: {
-    paddingVertical: SPACING.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.sm,
-  },
-  applyFiltersText: {
-    fontSize: FONTS.md,
-    fontWeight: '700',
-    color: '#FFF',
-    letterSpacing: 0.5,
-  },
-  
-  // Match Badge
-  matchBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
-    borderRadius: RADIUS.full,
-    gap: 4,
-    alignSelf: 'flex-start',
-    marginTop: SPACING.sm,
-    borderWidth: 1,
-  },
-  matchScore: {
-    fontSize: FONTS.xs,
-    fontWeight: '700',
-  },
-  
-  // Result Cards
-  resultsContainer: {
-    padding: SPACING.md,
-    gap: SPACING.md,
-  },
-  resultCard: {
-    backgroundColor: COLORS.background.secondary,
-    borderRadius: RADIUS.xl,
-    ...SHADOWS.medium,
-    overflow: 'hidden',
-  },
-  cardContent: {
-    padding: SPACING.lg,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    marginBottom: SPACING.sm,
-    position: 'relative',
-  },
-  avatar: {
-    width: 60,
-    height: 60,
-    borderRadius: RADIUS.full,
-    marginRight: SPACING.md,
-    borderWidth: 3,
-    borderColor: COLORS.primary + '30',
-  },
-  onlineDot: {
-    position: 'absolute',
-    top: 0,
-    left: 44,
-    width: 16,
-    height: 16,
+  skillsInput: {
+    padding: 10,
     borderRadius: 8,
-    backgroundColor: COLORS.success,
-    borderWidth: 3,
-    borderColor: COLORS.background.secondary,
+    marginBottom: 8,
   },
-  cardInfo: {
-    flex: 1,
-  },
-  userName: {
-    fontSize: FONTS.lg,
-    fontWeight: '700',
-    color: COLORS.text.primary,
-    marginBottom: 2,
-  },
-  userBio: {
-    fontSize: FONTS.sm,
-    color: COLORS.text.secondary,
-    lineHeight: 18,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: SPACING.md,
-    marginTop: SPACING.xs,
-  },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  statText: {
-    fontSize: FONTS.xs,
-    color: COLORS.text.tertiary,
-  },
-  skillsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING.xs,
-    marginVertical: SPACING.md,
-  },
-  skillPill: {
-    backgroundColor: COLORS.primary + '15',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 6,
-    borderRadius: RADIUS.sm,
-    borderWidth: 1,
-    borderColor: COLORS.primary + '30',
-  },
-  skillPillText: {
-    fontSize: FONTS.xs,
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
-  moreSkills: {
-    fontSize: FONTS.xs,
-    color: COLORS.text.tertiary,
-    alignSelf: 'center',
-    fontWeight: '500',
-  },
-  cardActions: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-    marginTop: SPACING.sm,
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.xs,
-    paddingVertical: SPACING.md,
-    borderRadius: RADIUS.md,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: COLORS.primary + '30',
-  },
-  actionButtonText: {
-    fontSize: FONTS.sm,
-    color: COLORS.primary,
-    fontWeight: '600',
-    position: 'relative',
-    zIndex: 1,
-  },
-  
-  // Project Cards
-  projectTitle: {
-    fontSize: FONTS.xl,
-    fontWeight: '700',
-    color: COLORS.text.primary,
-    marginBottom: SPACING.xs,
-  },
-  projectDesc: {
-    fontSize: FONTS.sm,
-    color: COLORS.text.secondary,
-    lineHeight: 20,
-    marginBottom: SPACING.sm,
-  },
-  authorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    marginBottom: SPACING.xs,
-  },
-  authorName: {
-    fontSize: FONTS.xs,
-    color: COLORS.text.tertiary,
-    fontStyle: 'italic',
-  },
-  projectStats: {
-    flexDirection: 'row',
-    gap: SPACING.lg,
-    marginTop: SPACING.md,
-  },
-  statGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  statValue: {
-    fontSize: FONTS.sm,
-    color: COLORS.text.secondary,
-    fontWeight: '600',
-  },
-  
-  // Search Stats
-  searchStats: {
-    marginHorizontal: SPACING.md,
-    marginTop: SPACING.sm,
-  },
-  statsGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: RADIUS.md,
-  },
-  searchStatsText: {
-    fontSize: FONTS.sm,
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
-  
-  // Empty State
-  emptyContainer: {
-    flex: 1,
-  },
-  emptyContent: {
-    paddingVertical: SPACING.xl,
-    paddingHorizontal: SPACING.lg,
-    alignItems: 'center',
-  },
-  emptyIconContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: SPACING.lg,
-  },
-  emptyTitle: {
-    fontSize: FONTS.xxl,
-    fontWeight: '700',
-    color: COLORS.text.primary,
-    marginBottom: SPACING.xs,
-  },
-  emptyText: {
-    fontSize: FONTS.md,
-    color: COLORS.text.secondary,
-    textAlign: 'center',
-    marginBottom: SPACING.xl,
-  },
-  
-  // Recent & Trending
-  recentSection: {
-    width: '100%',
-    marginTop: SPACING.xl,
-  },
-  recentHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SPACING.md,
-  },
-  sectionTitle: {
-    fontSize: FONTS.lg,
-    fontWeight: '700',
-    color: COLORS.text.primary,
-  },
-  clearText: {
-    fontSize: FONTS.sm,
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
-  recentItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.md,
-    backgroundColor: COLORS.background.secondary,
-    borderRadius: RADIUS.md,
-    marginBottom: SPACING.xs,
-  },
-  recentText: {
-    fontSize: FONTS.md,
-    color: COLORS.text.secondary,
-    flex: 1,
-    fontWeight: '500',
-  },
-  
-  trendingSection: {
-    width: '100%',
-    marginTop: SPACING.xl,
-  },
-  trendingHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    marginBottom: SPACING.md,
-  },
-  trendingIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  trendingItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.md,
-    backgroundColor: COLORS.background.secondary,
-    borderRadius: RADIUS.md,
-    marginBottom: SPACING.xs,
-  },
-  trendingRank: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  trendingRankText: {
-    fontSize: FONTS.xs,
-    fontWeight: '700',
-    color: COLORS.primary,
-    position: 'relative',
-    zIndex: 1,
-  },
-  trendingText: {
-    flex: 1,
-    fontSize: FONTS.md,
-    color: COLORS.text.secondary,
-    fontWeight: '600',
-  },
-  trendingCount: {
-    fontSize: FONTS.xs,
-    color: COLORS.text.tertiary,
-  },
-  
-  // Featured Section
-  featuredSection: { marginTop: 10, paddingLeft: SPACING.md, marginBottom: 20 },
-  spotlightCard: {
-      width: 250, height: 160, backgroundColor: COLORS.background.secondary, borderRadius: RADIUS.lg,
-      marginRight: SPACING.m, padding: SPACING.md, position: 'relative', overflow: 'hidden', ...SHADOWS.medium
-  },
-  spotlightBadge: {
-      position: 'absolute', top: 10, left: 10, backgroundColor: COLORS.primary, borderRadius: 4, padding: 4, zIndex: 10
-  },
-  spotlightBadgeText: { color: 'white', fontSize: 10, fontWeight: 'bold' },
-  spotlightAvatar: { width: 60, height: 60, borderRadius: 30, marginBottom: 10 },
-  spotlightName: { fontSize: 16, fontWeight: 'bold' },
-  spotlightBio: { fontSize: 12, color: '#666' },
-  spotlightProjectImage: { width: '100%', height: '100%', position: 'absolute' },
-  spotlightOverlay: { ...StyleSheet.absoluteFillObject },
-  spotlightProjectInfo: { position: 'absolute', bottom: 10, left: 10, right: 10 },
-  spotlightProjectTitle: { color: 'white', fontWeight: 'bold', fontSize: 16, textShadowRadius: 4, textShadowColor: 'black' },
-
-  // Skill Graph
-  graphBanner: { margin: SPACING.md, borderRadius: RADIUS.lg, overflow: 'hidden', height: 80 },
-  graphBannerBg: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20 },
-  graphBannerTitle: { color: 'white', fontWeight: 'bold', fontSize: 18 },
-  graphBannerSub: { color: 'rgba(255,255,255,0.8)', fontSize: 12 },
-  graphContainer: { margin: SPACING.md, padding: SPACING.md, backgroundColor: '#f0f4ff', borderRadius: RADIUS.lg, minHeight: 300 },
-  graphHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
-  graphTitle: { fontWeight: 'bold', fontSize: 18, color: COLORS.primary },
-  graphContent: { alignItems: 'center' },
-  graphNodeRoot: { width: 80, height: 80, borderRadius: 40, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', marginBottom: 40, ...SHADOWS.large },
-  graphNodeTextRoot: { color: 'white', fontWeight: 'bold', textAlign: 'center' },
-  graphConnections: { position: 'absolute', width: 2, height: 40, backgroundColor: '#ccc', top: 80 },
-  graphRelatedNodes: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10 },
-  graphNode: { padding: 10, backgroundColor: 'white', borderRadius: 20, borderWidth: 1, borderColor: COLORS.primary, marginBottom: 10 },
-  graphNodeText: { color: COLORS.primary, fontWeight: '600' },
-  graphHint: { marginTop: 20, color: '#888', fontStyle: 'italic', fontSize: 12 },
-
-  // Filters
-  filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#f0f0f0', marginRight: 8 },
-  filterChipActive: { backgroundColor: COLORS.primary },
-  filterChipText: { fontSize: 13, color: COLORS.text.secondary },
-  filterChipTextActive: { color: 'white', fontWeight: '600' },
-  
-  saveSearchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 20, paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#f0f0f0' },
-  saveSearchText: { fontSize: 14, fontWeight: '600', color: COLORS.text.primary },
-
-  // Sort Options
+  filterInput: { fontSize: 14 },
+  skillTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  skillTag: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  skillTagText: { fontSize: 12, fontWeight: '600' },
+  filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
+  filterChipText: { fontSize: 12 },
   sortOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  sortOption: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#f5f5f5', marginBottom: 8 },
-  sortOptionActive: { backgroundColor: COLORS.primary },
-  sortOptionText: { fontSize: 12, color: COLORS.text.secondary },
-  sortOptionTextActive: { color: 'white' },
+  sortOption: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: 'transparent' },
+  sortOptionText: { fontSize: 12 },
+  saveSearchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#eee' },
+  saveSearchText: { fontSize: 14, fontWeight: '500' },
+  applyFiltersButton: { marginTop: 20, borderRadius: RADIUS.m, overflow: 'hidden' },
+  gradientButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 15, gap: 8 },
+  applyFiltersText: { color: '#FFF', fontWeight: 'bold' },
 
-  // Loading
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: SPACING.xxxl,
-  },
-  loadingText: {
-    marginTop: SPACING.md,
-    fontSize: FONTS.md,
-    color: COLORS.text.secondary,
-    fontWeight: '500',
-  },
+  // Stats
+  searchStats: { paddingHorizontal: SPACING.m, marginVertical: 8 },
+  searchStatsSimpleText: { fontSize: 12, textAlign: 'center' },
+  
+  // Empty State and Trending
+  emptyContainer: { flex: 1, paddingTop: 30 },
+  emptyContent: { paddingHorizontal: SPACING.m, paddingBottom: 50 },
+  emptyIconContainer: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center', alignSelf: 'center', marginBottom: 20 },
+  emptyTitle: { fontSize: 22, fontWeight: 'bold', textAlign: 'center', marginBottom: 10 },
+  emptyText: { fontSize: 16, textAlign: 'center', marginBottom: 40 },
+  recentSection: { marginBottom: 30 },
+  recentHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15, paddingHorizontal: 5 },
+  sectionTitle: { fontSize: 18, fontWeight: 'bold' },
+  clearText: { fontWeight: '600', fontSize: 14 },
+  recentItem: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 12, marginBottom: 10, gap: 12 },
+  recentText: { fontSize: 16 },
+  trendingSection: { marginBottom: 30 },
+  trendingHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 15 },
+  trendingIcon: { padding: 6, borderRadius: 8 },
+  trendingItem: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 12, marginBottom: 10 },
+  trendingRank: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginRight: 12 },
+  trendingRankText: { fontWeight: 'bold', fontSize: 12 },
+  trendingText: { fontSize: 16, fontWeight: '600', flex: 1 },
+  trendingCount: { fontSize: 12 },
+
+  // List Items
+  resultsContainer: { padding: SPACING.m },
+  resultCard: { marginBottom: 16, borderRadius: 16, borderWidth: 1, overflow: 'hidden' },
+  cardInner: { padding: 16 },
+  
+  // User Card
+  cardHeaderRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  avatarLarge: { width: 44, height: 44, borderRadius: 22 },
+  cardMainInfo: { flex: 1, marginHorizontal: 12 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  userNameTitle: { fontSize: 16, fontWeight: 'bold' },
+  onlineBadge: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#4caf50' },
+  userRoleText: { fontSize: 13, marginTop: 2 },
+  miniStatsRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 4 },
+  miniStatText: { fontSize: 12 },
+  dotSeparator: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#ccc' },
+  matchBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, gap: 4, borderWidth: 1 },
+  matchScore: { fontSize: 12, fontWeight: 'bold' },
+  skillTagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
+  skillTagSmall: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  skillTagTextSmall: { fontSize: 11 },
+  moreSkillsText: { fontSize: 11, alignSelf: 'center' },
+  cardActionRow: { flexDirection: 'row', gap: 10 },
+  actionBtn: { flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  actionBtnPrimary: {},
+  actionBtnSecondary: { flex: 0.3 },
+  actionBtnTextPrimary: { color: '#FFF', fontWeight: '600' },
+
+  // Project Card
+  projectHeaderRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 12 },
+  projectIconPlaceholder: { width: 40, height: 40, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+  projectTitleText: { fontSize: 16, fontWeight: 'bold' },
+  projectAuthorText: { fontSize: 12 },
+  projectDescText: { fontSize: 13, marginBottom: 12, lineHeight: 18 },
+  projectFooterRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  projectStatBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  projectStatText: { fontSize: 12, fontWeight: '600' },
+  viewDetailsBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  viewDetailsText: { fontSize: 12, fontWeight: '700' },
+  
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 50 },
+  loadingText: { marginTop: 10, fontSize: 14 }
 });

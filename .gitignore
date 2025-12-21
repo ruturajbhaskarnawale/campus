@@ -21,6 +21,7 @@ venv/
 debug_output*.txt
 *_log.txt
 *_log_*.txt
+*.txt
 git_check.py
 git_status_log.txt
 git_check_log.txt

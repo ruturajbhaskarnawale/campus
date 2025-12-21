@@ -10,7 +10,7 @@ const Stack = createStackNavigator();
 export default function ProfileStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: true }}>
-      <Stack.Screen name="MyProfile" component={ProfileScreen} options={{ title: 'Profile' }} />
+      <Stack.Screen name="MyProfile" component={ProfileScreen} options={{ headerShown: false }} />
       <Stack.Screen name="EditProfile" component={EditProfile} options={{ title: 'Edit Profile' }} />
       <Stack.Screen name="ProfileDetail" component={ProfileDetail} options={{ title: 'Profile' }} />
       <Stack.Screen name="Bookmarks" component={BookmarksScreen} options={{ title: 'Bookmarks' }} />

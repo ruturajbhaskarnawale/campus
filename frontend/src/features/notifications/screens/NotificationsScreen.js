@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   View, 
   Text, 
@@ -9,15 +9,14 @@ import {
   SafeAreaView, 
   Platform, 
   Image, 
-  Alert,
-  Animated
+  Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
+import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 import client from '../../../core/api/client';
 import { getCurrentUserId } from '../../../core/auth';
-import { COLORS, SHADOWS, SPACING, RADIUS, FONTS } from '../../../core/design/Theme';
+import { SPACING, SHADOWS } from '../../../core/design/Theme';
+import { useTheme } from '../../../core/contexts/ThemeContext';
 
 // Enhanced Mock Data covering all scenarios
 const MOCK_ENHANCED_NOTIFS = [
@@ -37,6 +36,7 @@ const MOCK_ENHANCED_NOTIFS = [
 ];
 
 export default function NotificationsScreen({ navigation }) {
+  const { colors, isDark } = useTheme();
   const [sections, setSections] = useState([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState('All'); 
@@ -98,9 +98,6 @@ export default function NotificationsScreen({ navigation }) {
   };
 
   useEffect(() => {
-     // Re-process if filter changes (needs data persistence, for now re-fetch mock)
-     // Ideally we store 'rawItems' state.
-     // For simplicity of this step, re-fetching/using mock directly
      processData(MOCK_ENHANCED_NOTIFS, filter);
   }, [filter]);
 
@@ -108,7 +105,6 @@ export default function NotificationsScreen({ navigation }) {
       try {
           await client.post('/notifications/mark_all_read', { uid });
           Alert.alert('Success', 'All notifications marked as read');
-          // Update local state visuals
           const updated = sections.map(sec => ({
               ...sec,
               data: sec.data.map(item => ({ ...item, read: true }))
@@ -120,9 +116,7 @@ export default function NotificationsScreen({ navigation }) {
   };
 
   const handlePress = (item) => {
-      // Optimistic update
       if (!item.read) {
-          // Update generic sections state
           const newSections = sections.map(sec => ({
               ...sec,
               data: sec.data.map(i => i.id === item.id ? { ...i, read: true } : i)
@@ -130,21 +124,12 @@ export default function NotificationsScreen({ navigation }) {
           setSections(newSections);
 
           if (uid) {
-              // Fire and forget, suppress error if mock id
               client.post('/notifications/mark_read', { uid, nid: item.id }).catch(() => {});
           }
-      }
-      
-      // Navigate based on type
-      if (item.type === 'mention') {
-          // Nav to chat or post
-      } else if (item.type === 'join_request') {
-          // Nav to User Profile
       }
   };
 
   const deleteItem = (itemId) => {
-      // Update state to remove item
       const newSections = sections.map(sec => ({
           ...sec,
           data: sec.data.filter(i => i.id !== itemId)
@@ -153,17 +138,12 @@ export default function NotificationsScreen({ navigation }) {
   };
 
   const renderSectionHeader = ({ section: { title } }) => (
-    <View style={styles.sectionHeader}>
-      <Text style={styles.sectionTitle}>{title}</Text>
+    <View style={[styles.sectionHeader, { backgroundColor: colors.background.primary }]}>
+      <Text style={[styles.sectionTitle, { color: colors.text.secondary }]}>{title}</Text>
     </View>
   );
 
   const renderRightActions = (progress, dragX, itemId) => {
-      const trans = dragX.interpolate({
-          inputRange: [-100, 0],
-          outputRange: [0, 100],
-          extrapolate: 'clamp',
-      });
       return (
           <TouchableOpacity onPress={() => deleteItem(itemId)} style={styles.deleteAction}>
              <Ionicons name="trash-outline" size={24} color="#fff" />
@@ -180,8 +160,9 @@ export default function NotificationsScreen({ navigation }) {
       <TouchableOpacity 
         style={[
             styles.item, 
-            isUnread && styles.unreadItem,
-            isHighPriority && styles.highPriorityItem
+            { backgroundColor: colors.background.card, borderBottomColor: colors.border },
+            isUnread && { backgroundColor: isDark ? colors.primary + '10' : '#f0f7ff' },
+            isHighPriority && { backgroundColor: isDark ? '#332b00' : '#fff8e1', borderLeftWidth: 3, borderLeftColor: '#ff9800' }
         ]}
         onPress={() => handlePress(item)}
         activeOpacity={0.8}
@@ -197,7 +178,7 @@ export default function NotificationsScreen({ navigation }) {
              )}
              {/* Badge Icon Overlay */}
              {item.avatar && (
-                 <View style={styles.miniIconBadge}>
+                 <View style={[styles.miniIconBadge, { backgroundColor: colors.primary, borderColor: colors.background.card }]}>
                       <Ionicons name={getIcon(item.type)} size={10} color="#fff" />
                  </View>
              )}
@@ -206,13 +187,13 @@ export default function NotificationsScreen({ navigation }) {
         {/* Content */}
         <View style={styles.contentContainer}>
             <View style={styles.headerRow}>
-                 <Text style={[styles.itemTitle, isUnread && styles.bold]} numberOfLines={2}>
+                 <Text style={[styles.itemTitle, { color: colors.text.primary }, isUnread && styles.bold]} numberOfLines={2}>
                      {item.title}
                  </Text>
-                 <Text style={styles.time}>{item.timestamp}</Text>
+                 <Text style={[styles.time, { color: colors.text.tertiary }]}>{item.timestamp}</Text>
             </View>
             
-            <Text style={styles.itemBody} numberOfLines={3}>
+            <Text style={[styles.itemBody, { color: colors.text.secondary }]} numberOfLines={3}>
                 {item.body}
             </Text>
 
@@ -224,18 +205,18 @@ export default function NotificationsScreen({ navigation }) {
             {/* Actions (Join Request) */}
             {item.type === 'join_request' && (
                 <View style={styles.actionButtons}>
-                    <TouchableOpacity style={[styles.actionBtn, styles.acceptBtn]} onPress={() => alert('Accepted')}>
+                    <TouchableOpacity style={[styles.actionBtn, { backgroundColor: colors.primary }]} onPress={() => alert('Accepted')}>
                         <Text style={styles.acceptText}>Accept</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={[styles.actionBtn, styles.declineBtn]} onPress={() => alert('Declined')}>
-                        <Text style={styles.declineText}>Decline</Text>
+                    <TouchableOpacity style={[styles.actionBtn, { backgroundColor: colors.background.card, borderWidth: 1, borderColor: colors.border }]} onPress={() => alert('Declined')}>
+                        <Text style={[styles.declineText, { color: colors.text.secondary }]}>Decline</Text>
                     </TouchableOpacity>
                 </View>
             )}
         </View>
         
         {/* Unread Dot */}
-        {isUnread && <View style={styles.dot} />}
+        {isUnread && <View style={[styles.dot, { backgroundColor: colors.primary }]} />}
       </TouchableOpacity>
       </Swipeable>
     );
@@ -256,34 +237,42 @@ export default function NotificationsScreen({ navigation }) {
       if (t === 'deadline') return '#f44336';
       if (t === 'birthday') return '#9c27b0';
       if (t === 'system_alert') return '#607d8b';
-      return COLORS.primary;
+      return colors.primary;
   };
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background.primary }]}>
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Notifications</Text>
+      <View style={[styles.header, { backgroundColor: colors.background.card, borderBottomColor: colors.border }]}>
+        <Text style={[styles.title, { color: colors.text.primary }]}>Notifications</Text>
         <View style={{flexDirection: 'row', gap: 16}}>
             <TouchableOpacity onPress={markAllRead}>
-                 <Ionicons name="checkmark-done-circle-outline" size={26} color={COLORS.primary} />
+                 <Ionicons name="checkmark-done-circle-outline" size={26} color={colors.primary} />
             </TouchableOpacity>
             <TouchableOpacity onPress={() => alert('Settings')}>
-                 <Ionicons name="settings-outline" size={24} color={COLORS.primary} />
+                 <Ionicons name="settings-outline" size={24} color={colors.primary} />
             </TouchableOpacity>
         </View>
       </View>
 
       {/* Tabs */}
-      <View style={styles.filterRow}>
+      <View style={[styles.filterRow, { backgroundColor: colors.background.card, borderBottomColor: colors.border }]}>
         {['All', 'Mentions', 'Requests'].map(f => (
             <TouchableOpacity 
                 key={f} 
-                style={[styles.filterChip, filter === f && styles.filterChipActive]}
+                style={[
+                    styles.filterChip, 
+                    { backgroundColor: colors.background.tertiary },
+                    filter === f && { backgroundColor: colors.primary }
+                ]}
                 onPress={() => setFilter(f)}
             >
-                <Text style={[styles.filterText, filter === f && styles.filterTextActive]}>{f}</Text>
+                <Text style={[
+                    styles.filterText, 
+                    { color: colors.text.secondary },
+                    filter === f && { color: 'white' }
+                ]}>{f}</Text>
             </TouchableOpacity>
         ))}
       </View>
@@ -300,15 +289,15 @@ export default function NotificationsScreen({ navigation }) {
         ListFooterComponent={
             <View style={styles.footer}>
                 <TouchableOpacity onPress={() => alert('Manage Push Settings')}>
-                    <Text style={styles.footerLink}>Manage settings</Text>
+                    <Text style={[styles.footerLink, { color: colors.primary }]}>Manage settings</Text>
                 </TouchableOpacity>
-                <Text style={styles.footerText}>That's all for now!</Text>
+                <Text style={[styles.footerText, { color: colors.text.tertiary }]}>That's all for now!</Text>
             </View>
         }
         ListEmptyComponent={
             <View style={styles.empty}>
-                <Ionicons name="notifications-off-outline" size={48} color="#ccc" />
-                <Text style={styles.emptyText}>All caught up!</Text>
+                <Ionicons name="notifications-off-outline" size={48} color={colors.text.tertiary} />
+                <Text style={[styles.emptyText, { color: colors.text.secondary }]}>All caught up!</Text>
             </View>
         }
       />
@@ -318,45 +307,36 @@ export default function NotificationsScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container:{flex:1, backgroundColor: '#f8f9fa'},
+  container:{flex:1},
   header: {
     padding: SPACING.m,
     paddingTop: Platform.OS === 'android' ? 40 : SPACING.m,
-    backgroundColor: 'white',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
   },
-  title:{fontSize:24, fontWeight:'bold', color: COLORS.text.primary},
+  title:{fontSize:24, fontWeight:'bold'},
   filterRow: {
     flexDirection: 'row',
     padding: SPACING.m,
-    backgroundColor: 'white',
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
   },
   filterChip: {
     paddingHorizontal: 16,
     paddingVertical: 6,
     borderRadius: 20,
-    backgroundColor: '#f0f0f0',
     marginRight: 8,
   },
-  filterChipActive: { backgroundColor: COLORS.primary },
-  filterText: { fontWeight: '600', color: '#666' },
-  filterTextActive: { color: 'white' },
+  filterText: { fontWeight: '600' },
   
   sectionHeader: {
       paddingHorizontal: SPACING.m,
       paddingVertical: 8,
-      backgroundColor: '#f8f9fa',
   },
   sectionTitle: {
       fontSize: 13,
       fontWeight: '700',
-      color: COLORS.text.secondary,
       textTransform: 'uppercase',
   },
 
@@ -364,17 +344,7 @@ const styles = StyleSheet.create({
   item:{
     flexDirection: 'row',
     padding: SPACING.m,
-    backgroundColor: 'white',
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  unreadItem: {
-    backgroundColor: '#f0f7ff', // Very light blue
-  },
-  highPriorityItem: {
-      backgroundColor: '#fff8e1', // Light gold/amber
-      borderLeftWidth: 3,
-      borderLeftColor: '#ff9800',
   },
   leftContainer: { marginRight: 12, position: 'relative' },
   avatar: { width: 44, height: 44, borderRadius: 22 },
@@ -389,21 +359,19 @@ const styles = StyleSheet.create({
       position: 'absolute',
       bottom: -2,
       right: -2,
-      backgroundColor: COLORS.primary,
       width: 16,
       height: 16,
       borderRadius: 8,
       justifyContent: 'center',
       alignItems: 'center',
       borderWidth: 1,
-      borderColor: '#fff'
   },
   contentContainer: { flex: 1 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 },
-  itemTitle: { fontSize: 14, color: COLORS.text.primary },
+  itemTitle: { fontSize: 14 },
   bold: { fontWeight: 'bold' },
-  time: { fontSize: 11, color: COLORS.text.tertiary, marginLeft: 8 },
-  itemBody: { fontSize: 13, color: COLORS.text.secondary, lineHeight: 18 },
+  time: { fontSize: 11, marginLeft: 8 },
+  itemBody: { fontSize: 13, lineHeight: 18 },
   
   // Rich Content
   postThumbnail: {
@@ -425,17 +393,14 @@ const styles = StyleSheet.create({
       paddingVertical: 6,
       borderRadius: 6,
   },
-  acceptBtn: { backgroundColor: COLORS.primary },
-  declineBtn: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd' },
   acceptText: { color: '#fff', fontWeight: 'bold', fontSize: 12 },
-  declineText: { color: COLORS.text.secondary, fontWeight: 'bold', fontSize: 12 },
+  declineText: { fontWeight: 'bold', fontSize: 12 },
 
   // Dot
   dot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: COLORS.primary,
     marginLeft: 8,
     marginTop: 6,
   },
@@ -451,9 +416,9 @@ const styles = StyleSheet.create({
 
   // Footer
   footer: { padding: 24, alignItems: 'center' },
-  footerLink: { color: COLORS.primary, fontWeight: '600', marginBottom: 8 },
-  footerText: { color: COLORS.text.tertiary, fontSize: 12 },
+  footerLink: { fontWeight: '600', marginBottom: 8 },
+  footerText: { fontSize: 12 },
 
   empty: { alignItems: 'center', marginTop: 100 },
-  emptyText: { color: '#999', marginTop: 10, fontSize: 16 },
+  emptyText: { marginTop: 10, fontSize: 16 },
 });
