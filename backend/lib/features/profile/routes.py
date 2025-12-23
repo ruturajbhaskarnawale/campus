@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
-from lib.core.utils.firebase_config import get_db
-from firebase_admin import firestore
+from lib.db.database import db_session
+from lib.db.models import User, Post, Project, Follow, Skill
 import datetime
 import random
 
@@ -8,80 +8,61 @@ profile_bp = Blueprint('profile', __name__)
 
 @profile_bp.route('/<user_id>/enhanced', methods=['GET'])
 def get_enhanced_profile(user_id):
-    """
-    Get detailed profile with gamification, stats, and badges.
-    """
     try:
-        db = get_db()
-        user_doc = db.collection('users').document(user_id).get()
+        session = db_session
+        user = session.query(User).filter(User.uid == user_id).first()
         
-        if not user_doc.exists:
-            return jsonify({"error": "User not found"}), 404
-            
-        user_data = user_doc.to_dict()
+        if not user:
+             return jsonify({"error": "User not found"}), 404
+             
+        # 1. Stats
+        proj_count = session.query(Project).filter(Project.owner_id == user.id).count() or 0
+        post_count = session.query(Post).filter(Post.author_id == user.id).count() or 0
         
-        # 1. Calculate Real Stats from DB
-        projects_ref = db.collection('projects')
-        posts_ref = db.collection('posts')
-
-        # Count Projects (Owned)
-        my_projects = projects_ref.where('owner', '==', user_id).stream()
-        proj_count = len(list(my_projects))
-
-        # Count Posts & Likes
-        my_posts = posts_ref.where('author', '==', user_id).stream()
-        post_list = list(my_posts)
-        post_count = len(post_list)
-        
+        # Likes calc (rough)
         total_likes = 0
-        for p in post_list:
-            pd = p.to_dict()
-            if 'likes' in pd and isinstance(pd['likes'], int):
-                total_likes += pd['likes']
-            elif 'likes' in pd and isinstance(pd['likes'], list):
-                 total_likes += len(pd['likes']) # If array of uids
+        user_posts = session.query(Post).filter(Post.author_id == user.id).all()
+        for p in user_posts:
+            total_likes += (p.likes_count or 0)
 
-        # 2. XP Algorithm
-        # Base: 100
-        # Project: 50
-        # Post: 10
-        # Like: 5
+        # 2. XP Logic
         calculated_xp = 100 + (proj_count * 50) + (post_count * 10) + (total_likes * 5)
+        # Assuming user has `xp_points` column updated by background jobs or triggers, but we can calc on fly
+        current_xp = user.xp_points if user.xp_points else calculated_xp
         
-        xp = calculated_xp
-        level = int(xp / 1000) + 1
-        next_level_xp = level * 1000
+        level = int(current_xp / 1000) + 1
         
-        # 3. Stats Object
         stats = {
-            'views': user_data.get('profile_views', 0),
+            'views': user.views_count if hasattr(user, 'views_count') else 0, # Add views_count to User model if missing or use mock
             'collaborations': proj_count,
             'likes': total_likes,
-            'reputation': int(calculated_xp / 10)
+            'reputation': int(current_xp / 10)
         }
         
-        # 3. Badges (Mock if not present)
-        badges = user_data.get('badges', [
-            {'id': 'early_adopter', 'icon': '🚀', 'name': 'Early Adopter'},
-            {'id': 'bug_hunter', 'icon': '🐛', 'name': 'Bug Hunter'}
-        ])
+        # Default mock badges if none (we haven't implemented badge table yet)
+        badges = [
+             {'id': 'early', 'icon': '🚀', 'name': 'Early Adopter'}
+        ]
         
-        # 4. Social Links
-        socials = user_data.get('socials', {
-            'github': 'https://github.com/example',
-            'linkedin': 'https://linkedin.com/in/example',
-            'website': 'https://portfolio.com'
-        })
+        socials = {
+            'github': user.github_url,
+            'linkedin': user.linkedin_url,
+            'website': user.website_url
+        }
 
         enhanced_data = {
-            **user_data,
+            'uid': user.uid,
+            'name': user.full_name,
+            'bio': user.bio,
+            'avatar_url': user.avatar_url,
+            'cover_photo': user.cover_photo_url,
             'level': level,
-            'current_xp': xp,
-            'next_level_xp': next_level_xp,
+            'current_xp': current_xp,
+            'next_level_xp': level * 1000,
             'stats': stats,
             'badges': badges,
             'socials': socials,
-            'cover_photo': user_data.get('cover_photo', 'https://via.placeholder.com/800x200/4facfe/ffffff?text=Creator')
+            'skills': [s.name for s in user.skills]
         }
         
         return jsonify(enhanced_data), 200
@@ -127,14 +108,21 @@ def get_contribution_graph(user_id):
 @profile_bp.route('/<user_id>/skills', methods=['GET'])
 def get_skills(user_id):
     try:
-        # Mocking detailed skills with endorsement counts
-        skills = [
-            {'name': 'React Native', 'level': 90, 'endorsements': 12},
-            {'name': 'Python', 'level': 85, 'endorsements': 8},
-            {'name': 'UI/UX Design', 'level': 70, 'endorsements': 5},
-            {'name': 'Firebase', 'level': 60, 'endorsements': 3},
-        ]
-        return jsonify(skills), 200
+        session = db_session
+        user = session.query(User).filter(User.uid == user_id).first()
+        if not user: return jsonify([]), 200
+        
+        enriched = []
+        # Query UserSkills junction for level/endorsements
+        # For now just use the relationship list
+        for s in user.skills:
+             enriched.append({
+                 'name': s.name,
+                 'level': 50, # mock or fetch from junction
+                 'endorsements': s.popularity_count
+             })
+             
+        return jsonify(enriched), 200
     except Exception as e:
          return jsonify({"error": str(e)}), 500
 

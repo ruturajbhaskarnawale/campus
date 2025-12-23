@@ -170,7 +170,7 @@ export default function PostDetail({ route, navigation }) {
                  author_name: 'Me', // Should be handled by backend auth middleware really
                  uid: uid
              };
-             const res = await client.post(`/feed/${postId}/comments`, payload);
+             const res = await client.post(`/feed/${postId}/comment`, payload);
              
              if (res.data.hidden) {
                  Alert.alert("Hold on", "Your comment has been flagged for review.");
@@ -187,7 +187,7 @@ export default function PostDetail({ route, navigation }) {
     const toggleBookmark = async () => {
         setIsBookmarked(!isBookmarked); // Optimistic Update
         try {
-            await client.post(`/feed/${postId}/bookmark`, { uid });
+            await client.post(`/feed/${postId}/save`, { uid });
         } catch (e) {
             setIsBookmarked(!isBookmarked); // Revert
         }
@@ -221,20 +221,26 @@ export default function PostDetail({ route, navigation }) {
         return <View style={styles.center}><ActivityIndicator size="large" color={colors.primary} /></View>;
     }
 
-    // Organize Comments (Threaded)
-    // Basic single-level nesting support for UI
-    const rootComments = comments.filter(c => !c.parentId);
-    const getReplies = (parentId) => comments.filter(c => c.parentId === parentId);
+    // Flattened or Tree depends on backend, but our Routes.py now returns Tree (Roots).
+    // So comments = roots.
+    // getReplies helper is no longer needed for rendering if we use .replies prop
+    
+    // const rootComments = comments.filter(c => !c.parentId); // specific for flat list
+    const getReplies = (parentId) => []; // Unused if pre-nested
 
     const renderComment = (comment, level = 0) => {
-        const replies = getReplies(comment.id);
+        const replies = comment.replies || []; // Backend now returns nested
         const isAuthor = comment.author_uid === post.author_uid;
         
         return (
             <View key={comment.id} style={[styles.commentItem, { marginLeft: level * 16, borderLeftWidth: level > 0 ? 2 : 0, borderLeftColor: colors.border }]}>
                 <View style={styles.commentHeader}>
                     <View style={[styles.commentAvatar, { backgroundColor: colors.background.tertiary }]}>
-                         <Text style={[styles.avatarText, { color: colors.text.primary }]}>{comment.author_name?.[0]}</Text>
+                         {comment.author_avatar ? (
+                             <Image source={{uri: comment.author_avatar}} style={{width:32, height:32, borderRadius:16}} />
+                         ) : (
+                             <Text style={[styles.avatarText, { color: colors.text.primary }]}>{comment.author_name?.[0]}</Text>
+                         )}
                     </View>
                     <View style={{flex: 1}}>
                         <View style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
@@ -250,8 +256,8 @@ export default function PostDetail({ route, navigation }) {
                     <TouchableOpacity onPress={() => setReplyTo(comment.id)}><Text style={[styles.actionText, { color: colors.text.tertiary }]}>Reply</Text></TouchableOpacity>
                 </View>
 
-                {/* Recursion for Level 1 max to avoid deep nesting UI issues on mobile */}
-                {level < 1 && replies.map(r => renderComment(r, level + 1))}
+                {/* Recursive Rendering */}
+                {replies.map(r => renderComment(r, level + 1))}
             </View>
         );
     };
@@ -286,7 +292,7 @@ export default function PostDetail({ route, navigation }) {
                 {/* 1. Immersive Header */}
                 <View style={[styles.headerPlaceholder, { height: headerHeight }]}>
                     <Animated.Image 
-                        source={{ uri: post.media_urls?.[0] || 'https://via.placeholder.com/800x600' }} 
+                        source={{ uri: post.media_urls?.[0] || 'https://picsum.photos/800/600' }} 
                         style={[styles.headerImage, { height: headerHeight, transform: [{ translateY: headerTranslate }, { scale: imageScale }] }]}
                         resizeMode="cover"
                     />
@@ -298,7 +304,7 @@ export default function PostDetail({ route, navigation }) {
                            <Text style={styles.headerTitle}>{post.title}</Text>
                            <View style={styles.headerMeta}>
                                <View style={styles.authorRow}>
-                                   <Image source={{ uri: post.author_avatar || 'https://via.placeholder.com/40' }} style={styles.smallAvatar} />
+                                   <Image source={{ uri: post.author_avatar || 'https://picsum.photos/40/40' }} style={styles.smallAvatar} />
                                    <Text style={styles.headerAuthor}>{post.author_name}</Text>
                                    {/* 19. One-tap connect */}
                                    <TouchableOpacity onPress={handleConnect} style={styles.connectBtn}>
@@ -352,7 +358,7 @@ export default function PostDetail({ route, navigation }) {
                             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                                 {post.more_from_author.map(p => (
                                     <TouchableOpacity key={p.id} style={styles.miniCard} onPress={() => navigation.push('PostDetail', { postId: p.id })}>
-                                        <Image source={{ uri: p.media_urls?.[0] || 'https://via.placeholder.com/100' }} style={styles.miniCardImage} />
+                                        <Image source={{ uri: p.media_urls?.[0] || 'https://picsum.photos/100/100' }} style={styles.miniCardImage} />
                                         <Text style={[styles.miniCardTitle, { color: colors.text.primary }]} numberOfLines={2}>{p.title}</Text>
                                     </TouchableOpacity>
                                 ))}
@@ -367,7 +373,7 @@ export default function PostDetail({ route, navigation }) {
                             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                                 {post.similar_projects.map(p => (
                                     <TouchableOpacity key={p.id} style={styles.miniCard} onPress={() => navigation.push('PostDetail', { postId: p.id })}>
-                                        <Image source={{ uri: p.media_urls?.[0] || 'https://via.placeholder.com/100' }} style={styles.miniCardImage} />
+                                        <Image source={{ uri: p.media_urls?.[0] || 'https://picsum.photos/100/100' }} style={styles.miniCardImage} />
                                         <Text style={[styles.miniCardTitle, { color: colors.text.primary }]} numberOfLines={2}>{p.title}</Text>
                                     </TouchableOpacity>
                                 ))}
@@ -386,10 +392,10 @@ export default function PostDetail({ route, navigation }) {
                         </View>
                         
                         {/* 3. Threaded Comments & 12. Badges */}
-                        {rootComments.length === 0 ? (
+                        {comments.length === 0 ? (
                             <Text style={{color: colors.text.tertiary, fontStyle: 'italic'}}>No comments yet. Be the first!</Text>
                         ) : (
-                            rootComments.map(c => renderComment(c))
+                            comments.map(c => renderComment(c))
                         )}
                         
                         {/* 17. Load More (Simple placeholder) */}

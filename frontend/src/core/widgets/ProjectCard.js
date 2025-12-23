@@ -3,6 +3,9 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert, Animated, Pressable, S
 import { Ionicons } from '@expo/vector-icons';
 import client from '../api/client';
 import { getCurrentUserId } from '../../core/auth';
+import LikesListModal from '../../features/feed/components/LikesListModal';
+import PollWidget from './PollWidget';
+import ReactionPicker from './ReactionPicker';
 import { COLORS, RADIUS, SHADOWS, SPACING, FONTS } from '../design/Theme';
 import * as Haptics from 'expo-haptics';
 
@@ -12,13 +15,18 @@ export default function ProjectCard({ project, onJoin, navigation }) {
   const scaleValue = useRef(new Animated.Value(1)).current;
   const likeScale = useRef(new Animated.Value(1)).current;
   const bookmarkScale = useRef(new Animated.Value(1)).current;
+  const [showLikesModal, setShowLikesModal] = useState(false);
   
-  const [isLiked, setIsLiked] = useState(false);
+  const [isLiked, setIsLiked] = useState(project.is_liked || false);
   const [likesCount, setLikesCount] = useState(project.likes || 0);
-  const [isBookmarked, setIsBookmarked] = useState(false);
+  const [isBookmarked, setIsBookmarked] = useState(project.is_saved || false);
   const [showReactions, setShowReactions] = useState(false);
+  const [myReaction, setMyReaction] = useState(project.my_reaction || 'like'); // default to like if liked
+  
   const [isAuthor, setIsAuthor] = useState(false);
   const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
+  const [pollData, setPollData] = useState(project.poll_data);
+  const [userVoted, setUserVoted] = useState(false); // ToDo: Check from backend if already voted
 
   // Double tap logic
   let lastTap = null;
@@ -26,11 +34,17 @@ export default function ProjectCard({ project, onJoin, navigation }) {
   useEffect(() => {
     checkUser();
   }, [project]);
+  
+  // Sync if props update (e.g. from feed refresh)
+  useEffect(() => {
+       if (project.is_liked !== undefined) setIsLiked(project.is_liked);
+       if (project.is_saved !== undefined) setIsBookmarked(project.is_saved);
+       if (project.likes !== undefined) setLikesCount(project.likes);
+  }, [project.is_liked, project.is_saved, project.likes]);
 
   const checkUser = async () => {
        const uid = await getCurrentUserId();
        if (uid === project.author_uid) setIsAuthor(true);
-       // Check if liked previously (mock or api)
   };
 
   const handlePressIn = () => {
@@ -49,25 +63,76 @@ export default function ProjectCard({ project, onJoin, navigation }) {
   };
 
   const triggerHaptic = () => {
-      // Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); 
-      // Commented out to prevent web errors if package issue, but normally safe in Expo
-      // Safe guard:
       try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch(e){}
   };
 
   const handleLike = async (reactionType = 'like') => {
-      const newVal = !isLiked;
+      // Optimistic Update
+      const previousLiked = isLiked;
+      const previousCount = likesCount;
+      const previousReaction = myReaction;
+      
+      const isRemoving = isLiked && myReaction === reactionType;
+      const newVal = !isRemoving;
+      
       setIsLiked(newVal);
-      setLikesCount(prev => newVal ? prev + 1 : prev - 1);
-      animateIcon(likeScale);
-      triggerHaptic();
+      setMyReaction(newVal ? reactionType : null);
+      
+      if (newVal) {
+          if (!previousLiked) setLikesCount(prev => prev + 1); // New like
+          animateIcon(likeScale);
+          triggerHaptic();
+      } else {
+          setLikesCount(prev => Math.max(0, prev - 1));
+      }
+      
+      setShowReactions(false);
       
       try {
-           await client.post(`/feed/${project.id}/react`, { reaction: reactionType, uid: await getCurrentUserId() });
+           await client.post(`/feed/${project.id}/like`, { reaction_type: reactionType });
       } catch (e) {
-          console.error(e);
+          console.error("Like Error", e);
+          // Revert
+          setIsLiked(previousLiked);
+          setLikesCount(previousCount);
+          setMyReaction(previousReaction);
       }
-      setShowReactions(false);
+  };
+
+  const handlePollVote = async (optionIndex) => {
+      if (userVoted) return;
+      try {
+          const res = await client.post(`/feed/${project.id}/polls/vote`, { option_index: optionIndex });
+          setPollData(res.data.poll_data);
+          setUserVoted(true);
+          triggerHaptic();
+      } catch(e) {
+          console.error(e);
+          Alert.alert("Error voting");
+      }
+  };
+
+  // Helper for reaction icon
+  const getReactionIcon = () => {
+      if (!isLiked) return "heart-outline";
+      switch(myReaction) {
+          case 'love': return "heart";
+          case 'celebrate': return "ribbon"; // map correctly
+          case 'insightful': return "bulb";
+          case 'funny': return "happy";
+          default: return "heart";
+      }
+  };
+  
+  const getReactionColor = () => {
+      if (!isLiked) return COLORS.text.secondary;
+      switch(myReaction) {
+          case 'love': return '#e91e63';
+          case 'celebrate': return '#ffca28';
+          case 'insightful': return '#ffb74d';
+          case 'funny': return '#ffc107';
+          default: return COLORS.error;
+      }
   };
 
   const handleDoubleTap = () => {
@@ -78,22 +143,38 @@ export default function ProjectCard({ project, onJoin, navigation }) {
           triggerHaptic();
       } else {
           lastTap = now;
-          // Single tap logic if needed (e.g. open image), for now do nothing or navigate
           if (navigation) navigation.navigate('PostDetail', { postId: project.id });
       }
   };
 
-  const handleBookmark = () => {
+  const handleBookmark = async () => {
+      const prev = isBookmarked;
       setIsBookmarked(!isBookmarked);
       animateIcon(bookmarkScale);
       triggerHaptic();
+      try {
+           await client.post(`/feed/${project.id}/save`);
+      } catch(e) {
+           console.error(e);
+           setIsBookmarked(prev);
+      }
+  };
+
+  const handleJoin = async () => {
+       try {
+           await client.post(`/feed/${project.id}/join`, { uid: await getCurrentUserId() });
+           Alert.alert("Success", "Request sent to project author!");
+           if (onJoin) onJoin();
+       } catch (e) {
+           Alert.alert("Error", "Failed to send request. " + (e.response?.data?.error || e.message));
+       }
   };
 
   const handleShare = async () => {
       try {
           await Share.share({
               message: `Check out this project: ${project.title} on Campus Hub!`,
-              url: `https://campushub.app/feed/${project.id}`, // Deep link
+              url: `https://campushub.app/feed/${project.id}`, 
           });
       } catch (error) {
           Alert.alert(error.message);
@@ -125,7 +206,7 @@ export default function ProjectCard({ project, onJoin, navigation }) {
                 showsHorizontalScrollIndicator={false}
                 onScroll={(e) => {
                     const x = e.nativeEvent.contentOffset.x;
-                    const index = Math.round(x / (width - SPACING.m * 4)); // approx width adjustment
+                    const index = Math.round(x / (width - SPACING.m * 4)); 
                     setCurrentMediaIndex(index);
                 }}
                 scrollEventThrottle={16}
@@ -158,10 +239,16 @@ export default function ProjectCard({ project, onJoin, navigation }) {
         
         {/* Header */}
         <View style={styles.header}>
-          <View style={styles.avatarPlaceholder}>
-             <Text style={styles.avatarText}>{project.author_name ? project.author_name[0].toUpperCase() : 'A'}</Text>
-          </View>
-          <View style={{ flex: 1 }}>
+          <TouchableOpacity onPress={() => navigation && navigation.navigate('Profile', { uid: project.author_uid })}>
+            <View style={styles.avatarPlaceholder}>
+                {project.author_avatar ? (
+                     <Animated.Image source={{uri: project.author_avatar}} style={{width:40,height:40,borderRadius:20}} />
+                ) : (
+                   <Text style={styles.avatarText}>{project.author_name ? project.author_name[0].toUpperCase() : 'A'}</Text>
+                )}
+            </View>
+          </TouchableOpacity>
+          <View style={{ flex: 1, marginLeft: project.author_avatar ? 0 : 0 }}>
             <Text style={styles.author}>{project.author_name || 'Anonymous'}</Text>
             <Text style={styles.timestamp}>{timeAgo(project.timestamp)}</Text>
           </View>
@@ -176,6 +263,15 @@ export default function ProjectCard({ project, onJoin, navigation }) {
 
         {/* Rich Media */}
         {renderMedia()}
+        
+        {/* Polls */}
+        {pollData && (
+            <PollWidget 
+                pollData={pollData} 
+                onVote={handlePollVote} 
+                userVoted={userVoted}
+            />
+        )}
 
         {/* Tags */}
         <View style={styles.skillsContainer}>
@@ -186,46 +282,31 @@ export default function ProjectCard({ project, onJoin, navigation }) {
           ))}
         </View>
 
-        {/* Stats / Liked By Pile */}
+        {/* Stats */}
         <View style={styles.statsRow}>
-             <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                 {[1,2,3].map((_,i) => (
-                     <View key={i} style={[styles.miniAvatar, { marginLeft: i > 0 ? -10 : 0, zIndex: 10-i, backgroundColor: COLORS.primaryGradient[i%2] }]}>
-                          <Text style={{fontSize:8, color:'white'}}>{String.fromCharCode(65+i)}</Text>
-                     </View>
-                 ))}
-                 <Text style={styles.likedByText}>Liked by Alice and {likesCount} others</Text>
-             </View>
+            {likesCount > 0 && (
+             <TouchableOpacity style={{flexDirection: 'row', alignItems: 'center'}} onPress={() => setShowLikesModal(true)}>
+                 <Text style={styles.likedByText}>{likesCount} Likes</Text>
+             </TouchableOpacity>
+            )}
         </View>
 
         {/* Actions */}
         <View style={styles.footer}>
           
-          {/* Like / Reactions */}
-          <View>
-              {showReactions && (
-                  <View style={styles.reactionTray}>
-                      {['🔥','👏','❤️','💡'].map(emoji => (
-                          <TouchableOpacity key={emoji} onPress={() => handleLike(emoji)} style={{padding: 4}}>
-                              <Text style={{fontSize: 20}}>{emoji}</Text>
-                          </TouchableOpacity>
-                      ))}
-                  </View>
-              )}
-              <TouchableOpacity 
-                style={styles.actionButton} 
-                onPress={() => handleLike('like')} 
-                onLongPress={() => {
-                    setShowReactions(true);
-                    triggerHaptic();
-                }}
-              >
-                <Animated.View style={{ transform: [{ scale: likeScale }] }}>
-                    <Ionicons name={isLiked ? "heart" : "heart-outline"} size={24} color={isLiked ? COLORS.error : COLORS.text.secondary} />
-                </Animated.View>
-                <Text style={[styles.actionText, isLiked && { color: COLORS.error }]}>{likesCount}</Text>
-              </TouchableOpacity>
-          </View>
+          <TouchableOpacity 
+            style={styles.actionButton} 
+            onPress={() => handleLike('like')} 
+            onLongPress={() => setShowReactions(true)}
+            delayLongPress={300}
+          >
+            <Animated.View style={{ transform: [{ scale: likeScale }] }}>
+                <Ionicons name={getReactionIcon()} size={24} color={getReactionColor()} />
+            </Animated.View>
+            <Text style={[styles.actionText, isLiked && { color: getReactionColor() }]}>
+                {isLiked && myReaction !== 'like' ? myReaction.charAt(0).toUpperCase() + myReaction.slice(1) : 'Like'}
+            </Text>
+          </TouchableOpacity>
 
           <TouchableOpacity style={styles.actionButton} onPress={() => navigation && navigation.navigate('Comments', { postId: project.id })}>
             <Ionicons name="chatbubble-outline" size={22} color={COLORS.text.secondary} />
@@ -248,13 +329,26 @@ export default function ProjectCard({ project, onJoin, navigation }) {
                    <Text style={{fontSize: 12, color: COLORS.primary, fontWeight: 'bold', marginLeft: 4}}>View Stats</Text>
               </TouchableOpacity>
           ) : (
-              <TouchableOpacity style={{ marginLeft: 'auto' }} onPress={onJoin}>
+              <TouchableOpacity style={{ marginLeft: 'auto' }} onPress={handleJoin}>
                 <View style={styles.joinButton}>
-                   <Text style={styles.joinText}>Join</Text>
+                   <Text style={styles.joinText}>Join Project</Text>
                 </View>
               </TouchableOpacity>
           )}
         </View>
+
+        <LikesListModal 
+            visible={showLikesModal} 
+            onClose={() => setShowLikesModal(false)}
+            postId={project.id}
+            navigation={navigation}
+        />
+        
+        <ReactionPicker 
+            visible={showReactions}
+            onClose={() => setShowReactions(false)}
+            onSelect={handleLike}
+        />
 
       </Pressable>
     </Animated.View>
@@ -361,7 +455,7 @@ const styles = StyleSheet.create({
       width: 18, height: 18, borderRadius: 9, borderWidth: 1, borderColor: 'white', justifyContent: 'center', alignItems: 'center'
   },
   likedByText: {
-      fontSize: 12, color: COLORS.text.tertiary, marginLeft: 8
+      fontSize: 12, color: COLORS.text.tertiary
   },
   footer: {
     flexDirection: 'row',
@@ -369,7 +463,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
     paddingTop: SPACING.s,
-    position: 'relative', // for reactions
+    position: 'relative', 
   },
   actionButton: {
     flexDirection: 'row',
@@ -381,18 +475,6 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     color: COLORS.text.secondary,
     fontSize: 14,
-  },
-  reactionTray: {
-      position: 'absolute',
-      bottom: 40,
-      left: 0,
-      backgroundColor: 'white',
-      borderRadius: 20,
-      padding: 8,
-      flexDirection: 'row',
-      gap: 8,
-      ...SHADOWS.medium,
-      zIndex: 100,
   },
   joinButton: {
     backgroundColor: COLORS.primary,

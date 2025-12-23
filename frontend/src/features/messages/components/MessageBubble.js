@@ -124,7 +124,7 @@ export default function MessageBubble({
       {!isOwnMessage && (
         <View style={styles.avatarContainer}>
           {showAvatar ? (
-            <Image source={{ uri: avatar || 'https://via.placeholder.com/40' }} style={styles.avatar} />
+            <Image source={{ uri: avatar || 'https://picsum.photos/40/40' }} style={styles.avatar} />
           ) : (
             <View style={styles.avatarPlaceholder} />
           )}

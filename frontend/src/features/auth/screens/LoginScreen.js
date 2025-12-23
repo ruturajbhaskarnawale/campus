@@ -15,7 +15,6 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { initFirebase, signIn, signUp, getIdToken } from '../../../core/firebase/firebase';
 import client from '../../../core/api/client';
 import { setIdToken, setCurrentUserId } from '../../../core/auth';
 import { COLORS } from '../../../core/design/Theme';
@@ -45,33 +44,44 @@ export default function LoginScreen({ navigation }) {
     }
     setLoading(true);
     try {
-      initFirebase();
-      let user;
-      if (isRegistering) {
-        if (!email.endsWith('.edu')) {
-           throw new Error('Registration restricted to university emails (.edu)');
-        }
-        user = await signUp(email, password);
-      } else {
-        user = await signIn(email, password);
-      }
-
-      const token = await getIdToken(user, true);
-      await setIdToken(token);
-      await setCurrentUserId(user.uid);
+      let response;
       
-      // Verify backend
       if (isRegistering) {
-        await client.post('/auth/verify-token', { idToken: token });
+        if (!email.endsWith('.edu') && !email.endsWith('.ac.in')) {
+           throw new Error('Registration restricted to university emails (.edu or .ac.in)');
+        }
+        // Register Endpoint
+        response = await client.post('/auth/register', {
+          email: email,
+          password: password,
+          name: email.split('@')[0] // Default name from email
+        });
       } else {
-        try {
-           await client.post('/auth/verify-token', { idToken: token });
-        } catch(e) { console.log("Verify warning", e); }
+        // Login Endpoint
+        response = await client.post('/auth/login', {
+          email: email,
+          password: password
+        });
       }
 
-      navigation.replace('Main');
+      if (response && response.data) {
+          const { token, uid } = response.data;
+          
+          if (token && uid) {
+            await setIdToken(token);
+            await setCurrentUserId(uid);
+            navigation.replace('Main');
+          } else {
+             console.error("Invalid response components:", response.data);
+             throw new Error("Invalid response from server (Missing token/uid)");
+          }
+      } else {
+         throw new Error("Authentication failed. No data.");
+      }
+
     } catch (error) {
-      const message = error.response?.data?.error || error.message || "Authentication failed";
+      console.error("Auth Error:", error);
+      const message = error.response?.data?.message || error.message || "Authentication failed";
       Alert.alert("Error", message);
     } finally {
       setLoading(false);

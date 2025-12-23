@@ -9,11 +9,20 @@ def initialize_firebase():
     global db
     
     # Path to your downloaded key
-    # WE USE 'backend' because app.py runs from the backend folder
-    cred_path = "serviceAccountKey.json" 
+    # Resolve absolute path relative to this file to ensure it works from any CWD
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    # Go up 3 levels: utils(0) -> core(1) -> lib(2) -> backend(3)
+    # current_dir is .../backend/lib/core/utils
+    backend_dir = os.path.abspath(os.path.join(current_dir, '..', '..', '..'))
+    cred_path = os.path.join(backend_dir, "serviceAccountKey.json")
+    
     if not os.path.exists(cred_path):
-        # Fail fast: raising helps the developer notice missing credentials during startup
-        raise FileNotFoundError(f"serviceAccountKey.json not found at {cred_path}. Place your Firebase admin key in the backend folder or set GOOGLE_APPLICATION_CREDENTIALS.")
+        # Fallback: check current directory
+        if os.path.exists("serviceAccountKey.json"):
+            cred_path = "serviceAccountKey.json"
+        else:
+            # Fail fast
+            raise FileNotFoundError(f"serviceAccountKey.json not found at {cred_path}. Place your Firebase admin key in the backend folder.")
 
     # Check if app is already initialized to prevent errors during auto-reload
     try:

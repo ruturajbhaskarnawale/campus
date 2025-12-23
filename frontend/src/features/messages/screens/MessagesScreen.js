@@ -158,7 +158,7 @@ export default function MessagesScreen({ navigation }) {
               onPress={() => navigation.navigate('Chat', { ...user })}
             >
               <View style={styles.activeUserAvatarContainer}>
-                <Image source={{ uri: user.avatar || 'https://via.placeholder.com/60' }} style={styles.activeUserAvatar} />
+                <Image source={{ uri: user.avatar || 'https://picsum.photos/60/60' }} style={styles.activeUserAvatar} />
                 <View style={styles.activeUserDot} />
               </View>
               <Text style={styles.activeUserName} numberOfLines={1}>{user.name.split(' ')[0]}</Text>
@@ -185,7 +185,7 @@ export default function MessagesScreen({ navigation }) {
       >
         <View style={styles.avatarContainer}>
           <Image
-            source={{ uri: item.avatar || 'https://via.placeholder.com/60' }}
+            source={{ uri: item.avatar || 'https://picsum.photos/60/60' }}
             style={styles.avatar} // Circle
           />
           {item.online && <View style={styles.onlineDot} />}

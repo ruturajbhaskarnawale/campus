@@ -174,7 +174,7 @@ export default function ProfileScreen({ navigation }) {
                     <Ionicons name="qr-code-outline" size={24} color="#000" />
                 </TouchableOpacity>
                 <Text style={styles.pageTitle}>{profile?.username || 'Profile'}</Text>
-                <TouchableOpacity onPress={() => navigation.navigate('SettingsStack')}>
+                <TouchableOpacity onPress={() => navigation.navigate('Settings')}>
                     <Ionicons name="settings-outline" size={24} color="#000" />
                 </TouchableOpacity>
             </View>
@@ -244,7 +244,7 @@ export default function ProfileScreen({ navigation }) {
                         <View style={styles.postsGrid}>
                             {posts.map(post => (
                                 <TouchableOpacity key={post.id} style={styles.gridItem} onPress={() => navigation.navigate('ProfileDetail', { userId: uid })}>
-                                    <Image source={{ uri: post.media_urls?.[0] || 'https://via.placeholder.com/150' }} style={styles.gridImage} />
+                                    <Image source={{ uri: post.media_urls?.[0] || 'https://picsum.photos/150/150' }} style={styles.gridImage} />
                                 </TouchableOpacity>
                             ))}
                             {posts.length === 0 && <Text style={styles.emptyText}>No posts yet.</Text>}

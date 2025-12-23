@@ -5,12 +5,18 @@ import { getCurrentUserId } from '../../../core/auth';
 
 export default function BookmarksScreen({ navigation }) {
   const [items, setItems] = useState([]);
-  const uid = getCurrentUserId();
+  const [uid, setUid] = useState(null);
+
+  useEffect(() => {
+     // Resolve async UID first
+     getCurrentUserId().then(id => setUid(id));
+  }, []);
 
   useEffect(() => { if (uid) fetchBookmarks(); }, [uid]);
 
   const fetchBookmarks = async () => {
     try {
+      if (!uid) return;
       const res = await client.get(`/feed/user/${uid}/bookmarks`);
       const list = res.data || [];
       // Each bookmark may contain post_id or full post

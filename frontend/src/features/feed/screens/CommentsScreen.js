@@ -19,7 +19,8 @@ export default function CommentsScreen({ route }) {
   const postComment = async () => {
     if (!text) return;
     try {
-      await client.post(`/feed/${postId}/comments`, { text, author_name: 'Me' });
+      // The endpoint for adding a comment is /feed/<id>/comment (singular)
+      await client.post(`/feed/${postId}/comment`, { text, author_name: 'Me' });
       setText('');
       fetchComments();
     } catch (e) { console.error(e); Alert.alert('Error', 'Could not post comment'); }

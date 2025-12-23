@@ -87,7 +87,7 @@ export default function ChatScreen({ route, navigation }) {
       <View style={[styles.msgContainer, isMe ? styles.msgRight : styles.msgLeft]}>
         {!isMe && (
            <Image
-             source={{ uri: avatar || 'https://via.placeholder.com/40' }}
+             source={{ uri: avatar || 'https://picsum.photos/40/40' }}
              style={styles.avatarSmall}
            />
         )}
@@ -112,7 +112,7 @@ export default function ChatScreen({ route, navigation }) {
           <Ionicons name="arrow-back" size={24} color={COLORS.text.primary} />
         </TouchableOpacity>
         <Image 
-            source={{ uri: thread?.avatar || avatar || 'https://via.placeholder.com/40' }} 
+            source={{ uri: thread?.avatar || avatar || 'https://picsum.photos/40/40' }} 
             style={styles.headerAvatar} 
         />
         <View style={{flex: 1, marginLeft: 10}}>

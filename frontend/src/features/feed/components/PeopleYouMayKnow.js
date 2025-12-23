@@ -4,7 +4,7 @@ import { COLORS, SPACING, RADIUS, FONTS, SHADOWS } from '../../../core/design/Th
 import { Ionicons } from '@expo/vector-icons';
 import client from '../../../core/api/client';
 
-export default function PeopleYouMayKnow() {
+export default function PeopleYouMayKnow({ vertical = false }) {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -27,7 +27,7 @@ export default function PeopleYouMayKnow() {
     if (loading || users.length === 0) return null;
 
     const renderItem = ({ item }) => (
-        <View style={styles.card}>
+        <View style={[styles.card, vertical && styles.verticalCard]}>
             <View style={styles.avatarContainer}>
                 {item.avatar && item.avatar.startsWith('http') ? (
                     <Image source={{ uri: item.avatar }} style={styles.avatar} />
@@ -39,8 +39,10 @@ export default function PeopleYouMayKnow() {
                     </View>
                 )}
             </View>
-            <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
-            <Text style={styles.role} numberOfLines={1}>{item.title || 'Student'}</Text>
+            <View style={{flex: 1, alignItems: vertical ? 'flex-start' : 'center'}}>
+                <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
+                <Text style={styles.role} numberOfLines={1}>{item.title || 'Student'}</Text>
+            </View>
             
             <TouchableOpacity style={styles.connectBtn}>
                 <Ionicons name="person-add-outline" size={16} color={COLORS.primary} />
@@ -48,6 +50,23 @@ export default function PeopleYouMayKnow() {
             </TouchableOpacity>
         </View>
     );
+
+    if (vertical) {
+        return (
+            <View style={styles.container}>
+                <View style={styles.header}>
+                    <Text style={styles.title}>People You May Know</Text>
+                </View>
+                <View style={styles.list}>
+                    {users.map(item => (
+                        <View key={item.id}>
+                            {renderItem({ item })}
+                        </View>
+                    ))}
+                </View>
+            </View>
+        );
+    }
 
     return (
         <View style={styles.container}>
@@ -95,6 +114,14 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#eee',
     },
+    verticalCard: {
+        width: '100%',
+        marginRight: 0,
+        marginBottom: SPACING.s,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12
+    },
     avatarContainer: {
         marginBottom: SPACING.s,
     },
@@ -115,7 +142,16 @@ const styles = StyleSheet.create({
     role: {
         fontSize: 12,
         color: COLORS.text.secondary,
-        marginBottom: SPACING.m,
+        marginBottom: 8, // Default
+    },
+    verticalCard: {
+        width: '100%',
+        marginRight: 0,
+        marginBottom: SPACING.s,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 8, // Compact
+        gap: 12
     },
     connectBtn: {
         flexDirection: 'row',

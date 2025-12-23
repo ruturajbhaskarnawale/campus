@@ -1,88 +1,57 @@
 import sys
 import os
-import logging
-import firebase_admin
-from firebase_admin import credentials, firestore, auth
 
-# Setup Logging
-logging.basicConfig(
-    filename='fix_login.log', 
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    filemode='w'
-)
+# Ensure backend is in path
+sys.path.append(os.getcwd())
 
-def log(msg):
-    print(msg)
-    logging.info(msg)
+try:
+    from lib.db.database import init_db, db_session
+    from lib.db.models import User
+    import bcrypt
+    import uuid
+except Exception as e:
+    print(f"Import Error: {e}")
+    sys.exit(1)
 
-# Initialize Firebase
-if not firebase_admin._apps:
+def fix_user():
+    init_db()
+    session = db_session
+    
+    email = "ruturaj@university.edu"
+    password = "password123"
+    hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    
+    user = session.query(User).filter(User.email == email).first()
+    
+    if user:
+        print(f"User {email} exists. Updating password...")
+        user.password_hash = hashed
+        # Ensure uid is present
+        if not user.uid:
+            user.uid = str(uuid.uuid4())
+        session.commit()
+        print("User password updated successfully.")
+    else:
+        print(f"User {email} not found. Creating...")
+        new_user = User(
+            uid=str(uuid.uuid4()),
+            username=email.split('@')[0],
+            email=email,
+            full_name="Ruturaj (Fixed)",
+            password_hash=hashed,
+            role='Student',
+            avatar_url=f"https://ui-avatars.com/api/?name=Ruturaj+Fixed&background=random"
+        )
+        session.add(new_user)
+        session.commit()
+        print("User created successfully.")
+
+    # Verify
+    u = session.query(User).filter(User.email == email).first()
+    print(f"VERIFICATION: User {u.email} has hash starting with {u.password_hash[:10]}...")
+
+if __name__ == "__main__":
     try:
-        key_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'serviceAccountKey.json')
-        cred = credentials.Certificate(key_path)
-        firebase_admin.initialize_app(cred)
+        fix_user()
     except Exception as e:
-        log(f"Init Error: {e}")
-        sys.exit(1)
-
-db = firestore.client()
-
-def fix_login():
-    log("🚀 Starting Login Repair...")
-    
-    # 1. Get all Firestore users
-    users_ref = db.collection('users')
-    docs = users_ref.stream()
-    firestore_users = []
-    for doc in docs:
-        d = doc.to_dict()
-        d['uid'] = doc.id
-        firestore_users.append(d)
-    
-    log(f"Found {len(firestore_users)} users in Firestore.")
-
-    # 2. Check and Create in Auth
-    created = 0
-    existing = 0
-    errors = 0
-    
-    for u in firestore_users:
-        email = u.get('email')
-        uid = u['uid']
-        name = u.get('name', 'Unknown')
-        
-        if not email:
-            log(f"Skipping user {uid} - No email")
-            continue
-
-        try:
-            # Try to get user
-            try:
-                auth.get_user(uid)
-                existing += 1
-            except auth.UserNotFoundError:
-                # Create user
-                auth.create_user(
-                    uid=uid,
-                    email=email,
-                    password='password123',
-                    display_name=name,
-                    photo_url=u.get('avatar_url')
-                )
-                created += 1
-                if created % 20 == 0: log(f"Created {created} missing auth accounts...")
-                
-        except Exception as e:
-            # If email already exists but with different UID, this is tricky. 
-            # But our seed script generated unique emails.
-            log(f"Error for {email}: {e}")
-            errors += 1
-
-    log("✅ Fix Complete.")
-    log(f"Authorized Users: {existing}")
-    log(f"Newly Created Users: {created}")
-    log(f"Failed: {errors}")
-
-if __name__ == '__main__':
-    fix_login()
+        print(f"Execution Error: {e}")

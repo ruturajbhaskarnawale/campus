@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, FlatList, StyleSheet, Text, SafeAreaView, RefreshControl, StatusBar, TextInput, TouchableOpacity, Animated, Platform, ActivityIndicator, useWindowDimensions } from 'react-native';
+import { View, FlatList, StyleSheet, Text, SafeAreaView, RefreshControl, StatusBar, TextInput, TouchableOpacity, Animated, Platform, ActivityIndicator, useWindowDimensions, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import ProjectCard from '../../../core/widgets/ProjectCard';
 import client from '../../../core/api/client';
@@ -7,13 +7,15 @@ import { FeedSkeleton } from '../../../core/widgets/SkeletonLoader';
 import { SPACING, FONTS, RADIUS, SHADOWS } from '../../../core/design/Theme';
 import { useTheme } from '../../../core/contexts/ThemeContext';
 import PeopleYouMayKnow from '../components/PeopleYouMayKnow';
+import ProfileSummary from '../components/ProfileSummary';
+import RightSidebar from '../components/RightSidebar';
 import { useNavigationContext } from '../../../context/NavigationContext';
 import { useToast } from '../../../core/providers/ToastProvider';
 
 const CATEGORIES = ["All", "AI/ML", "Web Dev", "Mobile", "Blockchain", "Design", "Data"];
 
 export default function FeedScreen({ navigation }) {
-    const { colors, isDark } = useTheme(); // Theme Hook
+    const { colors, isDark } = useTheme(); 
     const [posts, setPosts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
@@ -30,30 +32,28 @@ export default function FeedScreen({ navigation }) {
     
     // Responsive Logic
     const { width } = useWindowDimensions();
-    const isDesktop = width >= 768;
+    const isDesktop = width >= 1024; // 3-column breakpoint
+    const isTablet = width >= 768 && width < 1024; // Tablet (maybe 2 col?)
 
-    // Config Hide on Scroll
+    // Config Hide on Scroll (Mobile Only)
     const { setTabBarVisible, isTabBarVisible } = useNavigationContext();
     const lastOffsetY = useRef(0);
     const lastScrollTime = useRef(0);
-    const scrollJsValue = useRef(0);
     
-    // Optimized Scroll Handler: Throttled to prevent blocking JS thread
     const handleScroll = (event) => {
+        if (isDesktop) return; // Disable hide logic on desktop
+
         const now = Date.now();
-        if (now - lastScrollTime.current < 100) return; // Throttle to 100ms
+        if (now - lastScrollTime.current < 100) return; 
         lastScrollTime.current = now;
 
         const currentOffset = event.nativeEvent.contentOffset.y;
         const diff = currentOffset - lastOffsetY.current;
 
-        // Only toggle if significant scroll and valid range
         if (Math.abs(diff) > 20 && currentOffset > 0) {
             if (diff > 0 && currentOffset > 100) {
-                 // Scrolling Down -> Hide
                  if (isTabBarVisible) setTabBarVisible(false);
             } else {
-                 // Scrolling Up or Top -> Show
                  if (!isTabBarVisible) setTabBarVisible(true);
             }
         }
@@ -64,7 +64,6 @@ export default function FeedScreen({ navigation }) {
         try {
             if (pageNum === 1 && !shouldRefresh) setLoading(true);
             
-            // Query Params
             let url = `/feed?page=${pageNum}&limit=10`;
             if (selectedCategory !== "All") url += `&skill=${selectedCategory}`;
             if (searchQuery) url += `&q=${encodeURIComponent(searchQuery)}`;
@@ -74,14 +73,16 @@ export default function FeedScreen({ navigation }) {
             if (response.data && Array.isArray(response.data)) data = response.data;
             
             if (shouldRefresh || pageNum === 1) {
-                // Determine if there are more
                 setHasMore(data.length >= 10);
-                // Client side search filtering (limited to fetched batch - trade off)
-                // Server-side search filtering enabled
                 setPosts(data);
             } else {
                 if (data.length < 10) setHasMore(false);
-                setPosts(prev => [...prev, ...data]);
+                setPosts(prev => {
+                    // Filter duplicates
+                    const existingIds = new Set(prev.map(p => p.id));
+                    const newPosts = data.filter(p => !existingIds.has(p.id));
+                    return [...prev, ...newPosts];
+                });
             }
 
         } catch (error) {
@@ -109,7 +110,7 @@ export default function FeedScreen({ navigation }) {
     }, [searchQuery]);
 
     useEffect(() => {
-        const timer = setTimeout(() => setShowNewPosts(true), 30000); // 30s for demo
+        const timer = setTimeout(() => setShowNewPosts(true), 30000); 
         return () => clearTimeout(timer);
     }, []);
 
@@ -137,21 +138,30 @@ export default function FeedScreen({ navigation }) {
     };
 
     const renderHeader = () => {
-        // Interpolate background opacity/blur
         const headerOpacity = scrollY.interpolate({
             inputRange: [0, 50],
             outputRange: [0, 1],
             extrapolate: 'clamp'
         });
 
+        // Desktop Layout for Header items (categories) should be integrated or separate?
+        // On desktop, categories might sit on top of feed or sidebar?
+        // Let's keep categories on top for now.
+
         return (
             <Animated.View style={[
                 styles.headerContainer, 
                 { 
-                    backgroundColor: colors.background.secondary, // Dynamic Color
+                    backgroundColor: colors.background.secondary, 
                     shadowOpacity: headerOpacity,
                     elevation: headerOpacity.interpolate({ inputRange:[0, 1], outputRange:[0, 4] }),
-                    top: isDesktop ? 64 : 0, // Push below Navbar on Desktop
+                    // Desktop adjustments:
+                    ...(isDesktop ? { 
+                        position: 'relative', // Not fixed on desktop? Or kept fixed.
+                        paddingTop: 20
+                    } : {
+                        top: 0
+                    })
                 }
             ]}>
                 <View style={[styles.searchBar, { backgroundColor: colors.background.tertiary }, isDesktop && { maxWidth: 600, alignSelf: 'center', width: '100%' }]}>
@@ -162,7 +172,6 @@ export default function FeedScreen({ navigation }) {
                         placeholderTextColor={colors.text.tertiary}
                         value={searchQuery}
                         onChangeText={setSearchQuery}
-                        // Web outline fix
                         {...((Platform.OS === 'web') ? { style: [styles.input, { outlineStyle: 'none', color: colors.text.primary }] } : {})}
                     />
                 </View>
@@ -172,7 +181,7 @@ export default function FeedScreen({ navigation }) {
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={[
                         styles.categoriesList, 
-                        isDesktop && { justifyContent: 'center', width: '100%', maxWidth: 700, alignSelf: 'center' }
+                        isDesktop && { justifyContent: 'center', width: '100%' }
                     ]}
                     renderItem={({ item }) => (
                         <TouchableOpacity 
@@ -197,7 +206,7 @@ export default function FeedScreen({ navigation }) {
     };
 
     const renderFooter = () => {
-        if (!loadingMore) return <View style={{height: 100}} />; // buffer
+        if (!loadingMore) return <View style={{height: 100}} />; 
         return (
             <View style={{ padding: 20, alignItems: 'center', marginBottom: 50 }}>
                 <ActivityIndicator size="small" color={colors.primary} />
@@ -208,14 +217,42 @@ export default function FeedScreen({ navigation }) {
     const renderItem = ({ item, index }) => (
         <View>
             <ProjectCard project={item} navigation={navigation} onJoin={() => navigation.navigate('PostDetail', { postId: item.id })} />
-            {/* Inject PeopleYouMayKnow after 3rd post */}
-            {index === 2 && <PeopleYouMayKnow />}
+            {/* Inject PeopleYouMayKnow after 3rd post ONLY on Mobile */}
+            {!isDesktop && index === 2 && <PeopleYouMayKnow />}
         </View>
+    );
+
+    const FeedList = () => (
+        <Animated.FlatList
+            ref={flatListRef}
+            data={posts}
+            renderItem={renderItem}
+            keyExtractor={item => item.id}
+            contentContainerStyle={[
+                styles.list, 
+                isDesktop && { paddingTop: SPACING.m } // No deep padding needed if header is relative
+            ]} 
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}
+            ListEmptyComponent={
+                <View style={styles.center}>
+                    <Ionicons name="folder-open-outline" size={64} color={colors.text.tertiary} />
+                    <Text style={[styles.emptyText, { color: colors.text.secondary }]}>No projects found.</Text>
+                </View>
+            }
+            onScroll={isDesktop ? undefined : Animated.event(
+                [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+                { useNativeDriver: true, listener: handleScroll } 
+            )}
+            onEndReached={loadMore}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={renderFooter}
+            showsVerticalScrollIndicator={!isDesktop}
+        />
     );
 
     if (loading && !refreshing && posts.length === 0) return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background.primary }]}>
-            {renderHeader()}
+             {/* Simple Skeleton for now */}
             <FeedSkeleton />
         </SafeAreaView>
     );
@@ -224,35 +261,36 @@ export default function FeedScreen({ navigation }) {
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background.primary }]}>
             <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background.primary} />
             
+            {/* Header stays at top for both? On desktop maybe just categories */}
+            {/* On desktop, let's put header in the middle column flow or above columns? Above is cleaner */}
             {renderHeader()}
 
-            <Animated.FlatList
-                ref={flatListRef}
-                data={posts}
-                renderItem={renderItem}
-                keyExtractor={item => item.id}
-                contentContainerStyle={[
-                    styles.list, 
-                    isDesktop && { paddingTop: 130 + 64, // Adjust for Navbar + Header
-                                   maxWidth: 800, alignSelf: 'center', width: '100%' } 
-                ]} 
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} progressViewOffset={isDesktop ? 120 : 60} />}
-                ListEmptyComponent={
-                    <View style={styles.center}>
-                        <Ionicons name="folder-open-outline" size={64} color={colors.text.tertiary} />
-                        <Text style={[styles.emptyText, { color: colors.text.secondary }]}>No projects found. Try different keywords!</Text>
+            {isDesktop ? (
+                <View style={styles.desktopContainer}>
+                    {/* Left Column */}
+                    <View style={styles.leftCol}>
+                        <ScrollView showsVerticalScrollIndicator={false} style={{flex: 1}}>
+                             <ProfileSummary />
+                        </ScrollView>
                     </View>
-                }
-                onScroll={Animated.event(
-                    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-                    { useNativeDriver: true, listener: handleScroll } 
-                )}
-                onEndReached={loadMore}
-                onEndReachedThreshold={0.5}
-                ListFooterComponent={renderFooter}
-            />
+                    
+                    {/* Middle Column */}
+                    <View style={styles.middleCol}>
+                         <FeedList />
+                    </View>
+                    
+                    {/* Right Column */}
+                    <View style={styles.rightCol}>
+                         <ScrollView showsVerticalScrollIndicator={false} style={{flex: 1}}>
+                             <RightSidebar />
+                         </ScrollView>
+                    </View>
+                </View>
+            ) : (
+                <FeedList />
+            )}
 
-            {showNewPosts && (
+            {showNewPosts && !isDesktop && (
                 <TouchableOpacity style={[styles.newPostsBtn, { backgroundColor: colors.primary }]} onPress={scrollToTop}>
                     <Text style={styles.newPostsText}>New Posts</Text>
                     <Ionicons name="arrow-up" size={16} color="white" />
@@ -265,22 +303,50 @@ export default function FeedScreen({ navigation }) {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     headerContainer: { 
-        position: 'absolute', 
-        top: 0, 
-        left: 0, 
-        right: 0, 
         zIndex: 10, 
         paddingBottom: SPACING.s,
-        paddingTop: Platform.OS === 'android' ? 40 : 0 
+        paddingTop: Platform.OS === 'android' ? 40 : 0,
+        // Default relative or absolute is handled in style prop based on desktop/mobile
     },
+    // Mobile specific header style
+    mobileHeaderFixed: {
+        position: 'absolute',
+        top: 0, left: 0, right: 0
+    },
+    
     searchBar: { flexDirection: 'row', alignItems: 'center', margin: SPACING.m, paddingHorizontal: SPACING.m, borderRadius: RADIUS.m, height: 44 },
     input: { flex: 1, marginLeft: SPACING.s, fontSize: 16, height: '100%' }, 
     categoriesList: { paddingHorizontal: SPACING.m },
     categoryChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: RADIUS.round, marginRight: SPACING.s, borderWidth: 1, borderColor: 'transparent' },
     categoryText: { fontWeight: '500' },
-    list: { padding: SPACING.m, paddingTop: 130 }, // Push list down below absolute header
+    
+    list: { padding: SPACING.m, paddingTop: 130 }, // Mobile padding default
     center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: SPACING.m, marginTop: 100 },
     emptyText: { ...FONTS.body, textAlign: 'center', marginTop: SPACING.m },
     newPostsBtn: { position: 'absolute', top: 130, alignSelf: 'center', paddingHorizontal: 16, paddingVertical: 8, borderRadius: RADIUS.round, flexDirection: 'row', alignItems: 'center', ...SHADOWS.medium, zIndex: 100 },
     newPostsText: { color: 'white', fontWeight: 'bold', marginRight: 6, fontSize: 12 },
+    
+    // Desktop 3-Column Grid
+    desktopContainer: {
+        flexDirection: 'row',
+        width: '100%',
+        maxWidth: 1200,
+        alignSelf: 'center',
+        paddingHorizontal: SPACING.m,
+        flex: 1,
+    },
+    leftCol: {
+        width: 280,
+        marginRight: SPACING.l,
+        maxHeight: '100%', 
+    },
+    middleCol: {
+        flex: 1,
+        maxWidth: 600,
+        marginRight: SPACING.l,
+    },
+    rightCol: {
+        width: 300,
+        maxHeight: '100%',
+    }
 });

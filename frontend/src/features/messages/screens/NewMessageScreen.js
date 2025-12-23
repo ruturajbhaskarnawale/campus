@@ -118,7 +118,7 @@ export default function NewMessageScreen({ navigation }) {
               createdAt: serverTimestamp(),
               updatedAt: serverTimestamp(),
               isGroup: true,
-              groupIcon: 'https://via.placeholder.com/100', // Default
+              groupIcon: 'https://picsum.photos/100/100', // Default
               lastMessage: {
                   text: 'Group created',
                   timestamp: new Date(),
@@ -129,7 +129,7 @@ export default function NewMessageScreen({ navigation }) {
           navigation.replace('Chat', {
               threadId: groupId,
               name: groupName,
-              avatar: 'https://via.placeholder.com/100' // pass group icon
+              avatar: 'https://picsum.photos/100/100' // pass group icon
           });
 
       } catch (e) {
@@ -142,7 +142,7 @@ export default function NewMessageScreen({ navigation }) {
     return (
         <TouchableOpacity style={[styles.userItem, isSelected && styles.userItemSelected]} onPress={() => handleSelectUser(item)}>
         <Image 
-            source={{ uri: item.avatar || 'https://via.placeholder.com/60' }} 
+            source={{ uri: item.avatar || 'https://picsum.photos/60/60' }} 
             style={styles.avatar} 
         />
         <View style={styles.userInfo}>

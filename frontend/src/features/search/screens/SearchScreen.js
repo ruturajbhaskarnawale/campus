@@ -530,7 +530,7 @@ export default function SearchScreen({ navigation }) {
       >
         <View style={styles.cardHeaderRow}>
           <Image
-            source={{ uri: item.avatar_url || 'https://via.placeholder.com/60' }}
+            source={{ uri: item.avatar_url || 'https://picsum.photos/60/60' }}
             style={styles.avatarLarge}
           />
           <View style={styles.cardMainInfo}>

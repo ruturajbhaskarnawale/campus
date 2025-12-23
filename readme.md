@@ -11,9 +11,11 @@ Unlike generic social media, this platform features **Smart Skill Matching** to 
 * **🔐 Student-Only Authentication:** Restricted access using university email verification (.edu) to ensure a verified student user base.
 * **🧠 Smart Skill Matching (USP):** Users can filter the project feed to find opportunities that match their specific skills (e.g., "Python", "Unity", "React").
 * **🛡️ AI Content Moderator (Innovation):** Integrated Machine Learning (NLP) engine that analyzes post content in real-time and automatically blocks toxic or bullying language before it is published.
-* **📱 Cross-Platform UI:** Built with React Native to run smoothly on both iOS and Android, featuring a premium glassmorphism design system.
+* **� Unified Search & Advanced Filters:** Powerful search engine to find People, Projects, and Posts with granular filters for skills, department, and university year.
+* **📈 Activity Heatmap:** GitHub-style contribution tracking on user profiles to showcase consistency and dedication.
+* **�📱 Cross-Platform UI:** Built with React Native to run smoothly on both iOS and Android, featuring a premium glassmorphism design system.
 * **📅 Scheduling System:** Plan and schedule project announcements for optimal visibility.
-* **📊 Profile Analytics:** Track profile visits and engagement with interactive charts.
+* **� Smart Notifications:** Real-time system for tracking new followers, likes, project applications, and system alerts.
 * **💬 Real-Time Messaging:** Instant collaboration with team members.
 
 ---
@@ -45,13 +47,15 @@ cd backend
 python -m venv venv
 
 # Activate it
-# Windows:
 venv\Scripts\activate
+# Windows:
+
 # Mac/Linux:
+
 source venv/bin/activate
 
 # Install dependencies
-pip install -r requirements.txt
+pip install -r requirements.txtw
 
 # Download ML Data
 python -m textblob.download_corpora
@@ -60,7 +64,7 @@ python -m textblob.download_corpora
 python app.py
 ```
 
-The server will start at http://127.0.0.1:5000
+The server will start at `http://0.0.0.0:5000` (accessible via localhost and your local network IP).
 
 ### 2. Frontend Setup (The App)
 Open a new terminal in the frontend folder:
@@ -74,7 +78,8 @@ npm install
 # Start the App
 npx expo start
 ```
-Press `w` for Web, `a` for Android Emulator, or scan the QR code with the Expo Go app on your phone.
+Press `w` for Web, `a` for Android Emulator, or scan the QR code with the Expo Go app on your physical Android/iOS device.
+*Note: The app is configured to automatically detect your computer's IP for physical device testing.*
 
 ---
 

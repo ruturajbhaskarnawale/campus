@@ -64,4 +64,11 @@ def home():
     return "Campus Project Hub Backend is Running! 🚀"
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    # Initialize DB (create missing tables)
+    from lib.db.database import init_db
+    print(">> Initializing Database (Checking for missing tables)...")
+    init_db()
+    print(">> Database Ready.")
+
+    # host='0.0.0.0' makes the server accessible from other devices in the network
+    app.run(host='0.0.0.0', debug=True, port=5000)

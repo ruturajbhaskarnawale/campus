@@ -26,3 +26,11 @@ git_check.py
 git_status_log.txt
 git_check_log.txt
 backend/serviceAccountKey.json
+
+
+
+# Secrets and DBs
+frontend/scripts/serviceAccountKey.json
+*.db
+*.db-shm
+*.db-wal
