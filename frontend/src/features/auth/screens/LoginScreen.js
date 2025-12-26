@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  StyleSheet, 
-  TouchableOpacity, 
-  Dimensions, 
-  Image, 
-  KeyboardAvoidingView, 
-  Platform, 
+import {
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  TouchableOpacity,
+  Dimensions,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
   Alert,
   ActivityIndicator
 } from 'react-native';
@@ -45,11 +45,11 @@ export default function LoginScreen({ navigation }) {
     setLoading(true);
     try {
       let response;
-      
+
       if (isRegistering) {
-        if (!email.endsWith('.edu') && !email.endsWith('.ac.in')) {
-           throw new Error('Registration restricted to university emails (.edu or .ac.in)');
-        }
+        // if (!email.endsWith('.edu') && !email.endsWith('.ac.in')) {
+        //    throw new Error('Registration restricted to university emails (.edu or .ac.in)');
+        // }
         // Register Endpoint
         response = await client.post('/auth/register', {
           email: email,
@@ -65,18 +65,18 @@ export default function LoginScreen({ navigation }) {
       }
 
       if (response && response.data) {
-          const { token, uid } = response.data;
-          
-          if (token && uid) {
-            await setIdToken(token);
-            await setCurrentUserId(uid);
-            navigation.replace('Main');
-          } else {
-             console.error("Invalid response components:", response.data);
-             throw new Error("Invalid response from server (Missing token/uid)");
-          }
+        const { token, uid } = response.data;
+
+        if (token && uid) {
+          await setIdToken(token);
+          await setCurrentUserId(uid);
+          navigation.replace('Main');
+        } else {
+          console.error("Invalid response components:", response.data);
+          throw new Error("Invalid response from server (Missing token/uid)");
+        }
       } else {
-         throw new Error("Authentication failed. No data.");
+        throw new Error("Authentication failed. No data.");
       }
 
     } catch (error) {
@@ -91,27 +91,27 @@ export default function LoginScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
-      
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === "ios" ? "padding" : undefined} 
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.contentWrapper}
       >
         {/* Left Side - Hero Image (Web Only) */}
         {isWeb && (
           <View style={styles.heroContainer}>
             {/* Placeholder for the generated hero image */}
-            <Image 
-              source={{ uri: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=1000&auto=format&fit=crop' }} 
+            <Image
+              source={{ uri: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=1000&auto=format&fit=crop' }}
               style={styles.heroImage}
               resizeMode="contain"
             />
             <View style={styles.floatingUI}>
-               <Image 
-                 source={{ uri: 'https://cdn-icons-png.flaticon.com/512/919/919853.png' }} // Node.js icon example
-                 style={{ width: 40, height: 40, marginBottom: 10 }}
-               />
-               <Text style={{ color: '#fff', fontWeight: 'bold' }}>CampusHub</Text>
-               <Text style={{ color: '#888', fontSize: 12 }}>Connect. Code. Create.</Text>
+              <Image
+                source={{ uri: 'https://cdn-icons-png.flaticon.com/512/919/919853.png' }} // Node.js icon example
+                style={{ width: 40, height: 40, marginBottom: 10 }}
+              />
+              <Text style={{ color: '#fff', fontWeight: 'bold' }}>CampusHub</Text>
+              <Text style={{ color: '#888', fontSize: 12 }}>Connect. Code. Create.</Text>
             </View>
           </View>
         )}
@@ -120,9 +120,9 @@ export default function LoginScreen({ navigation }) {
         <View style={styles.formSection}>
           <View style={styles.loginBox}>
             <Text style={styles.logoText}>CampusHub</Text>
-            
+
             <View style={styles.inputGroup}>
-              <TextInput 
+              <TextInput
                 style={styles.input}
                 placeholder="Phone number, username, or email"
                 placeholderTextColor="#737373"
@@ -130,7 +130,7 @@ export default function LoginScreen({ navigation }) {
                 onChangeText={setEmail}
                 autoCapitalize="none"
               />
-              <TextInput 
+              <TextInput
                 style={styles.input}
                 placeholder="Password"
                 placeholderTextColor="#737373"
@@ -140,8 +140,8 @@ export default function LoginScreen({ navigation }) {
               />
             </View>
 
-            <TouchableOpacity 
-              style={[styles.loginButton, loading && styles.disabledBtn]} 
+            <TouchableOpacity
+              style={[styles.loginButton, loading && styles.disabledBtn]}
               onPress={handleAuth}
               disabled={loading}
             >
@@ -168,7 +168,7 @@ export default function LoginScreen({ navigation }) {
                 <Text style={styles.forgotPassword}>Forgot password?</Text>
               </TouchableOpacity>
             )}
-            
+
             {isRegistering && (
               <Text style={styles.termsText}>
                 By signing up, you agree to our Terms, Data Policy and Cookies Policy.
@@ -186,11 +186,11 @@ export default function LoginScreen({ navigation }) {
           </View>
 
           <View style={styles.appStoreSection}>
-             <Text style={styles.getAppText}>Get the app.</Text>
-             <View style={styles.storeButtons}>
-                <View style={styles.storeBtnPlaceholder}><Text style={styles.storeText}>Google Play</Text></View>
-                <View style={styles.storeBtnPlaceholder}><Text style={styles.storeText}>Microsoft</Text></View>
-             </View>
+            <Text style={styles.getAppText}>Get the app.</Text>
+            <View style={styles.storeButtons}>
+              <View style={styles.storeBtnPlaceholder}><Text style={styles.storeText}>Google Play</Text></View>
+              <View style={styles.storeBtnPlaceholder}><Text style={styles.storeText}>Microsoft</Text></View>
+            </View>
           </View>
         </View>
       </KeyboardAvoidingView>

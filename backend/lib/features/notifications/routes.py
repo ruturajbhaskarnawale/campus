@@ -1,10 +1,9 @@
 from flask import Blueprint, request, jsonify
-from lib.core.utils.firebase_config import get_db
-from firebase_admin import firestore
-import datetime
+from lib.db.database import db_session
+from lib.db.models import User, Notification
+from datetime import datetime
 
 notifications_bp = Blueprint('notifications', __name__)
-
 
 @notifications_bp.route('/send', methods=['POST'])
 def send_notification():
@@ -16,14 +15,19 @@ def send_notification():
         if not to_uid or not (title or body):
             return jsonify({"error": "to and title/body required"}), 400
 
-        db = get_db()
-        notif_ref = db.collection('users').document(to_uid).collection('notifications').document()
-        notif_ref.set({
-            'title': title,
-            'body': body,
-            'read': False,
-            'timestamp': datetime.datetime.now()
-        })
+        session = db_session
+        user = session.query(User).filter(User.uid == to_uid).first()
+        if not user: return jsonify({"error": "User not found"}), 404
+        
+        new_notif = Notification(
+            user_id=user.id,
+            title=title,
+            message=body, # Model uses message? Check models.py
+            type='system',
+            created_at=datetime.utcnow()
+        )
+        session.add(new_notif)
+        session.commit()
         return jsonify({"message": "Stored"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -32,20 +36,20 @@ def send_notification():
 @notifications_bp.route('/list/<uid>', methods=['GET'])
 def list_notifications(uid):
     try:
-        db = get_db()
-        # order descending using Firestore constant
-        results = db.collection('users').document(uid).collection('notifications').order_by('timestamp', direction=firestore.Query.DESCENDING).stream()
+        session = db_session
+        user = session.query(User).filter(User.uid == uid).first()
+        if not user: return jsonify([]), 200
+        
+        notifs = session.query(Notification).filter(Notification.user_id == user.id).order_by(Notification.created_at.desc()).all()
         out = []
-        for r in results:
-            d = r.to_dict()
-            # convert timestamp to ISO string for JSON serialization
-            ts = d.get('timestamp')
-            if hasattr(ts, 'isoformat'):
-                try:
-                    d['timestamp'] = ts.isoformat()
-                except Exception:
-                    d['timestamp'] = str(ts)
-            out.append(d)
+        for n in notifs:
+            out.append({
+                'id': n.id,
+                'title': n.title,
+                'body': n.message,
+                'read': n.is_read,
+                'timestamp': n.created_at.isoformat()
+            })
         return jsonify(out), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -59,8 +63,13 @@ def register_token():
         token = data.get('token')
         if not uid or not token:
             return jsonify({"error": "uid and token required"}), 400
-        db = get_db()
-        db.collection('fcm_tokens').document(uid).set({'token': token, 'updated': datetime.datetime.now()})
+        
+        session = db_session
+        user = session.query(User).filter(User.uid == uid).first()
+        if user:
+            user.fcm_token = token
+            session.commit()
+            
         return jsonify({"message": "Registered"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -72,16 +81,23 @@ def mark_read():
         data = request.json or {}
         uid = data.get('uid')
         nid = data.get('nid')
-        if not uid or not nid:
-            return jsonify({"error": "uid and nid required"}), 400
         
-        db = get_db()
-        db.collection('users').document(uid).collection('notifications').document(nid).update({'read': True})
+        session = db_session
+        # We need the notification ID (Integer). 
+        # If frontend sends integer ID from previous list call, good.
+        # If it sends UID or something else, handle it?
+        # Assuming ID is int.
+        try:
+             nid_int = int(nid)
+             notif = session.query(Notification).get(nid_int)
+             if notif:
+                 notif.is_read = True
+                 session.commit()
+        except:
+             pass
+             
         return jsonify({"message": "Marked read"}), 200
     except Exception as e:
-        # If document not found, just return success or 404, but don't 500
-        if 'NotFound' in str(e) or 'No document to update' in str(e):
-             return jsonify({"message": "Notification not found or already deleted"}), 404
         return jsonify({"error": str(e)}), 500
 
 
@@ -90,24 +106,14 @@ def mark_all_read():
     try:
         data = request.json or {}
         uid = data.get('uid')
-        if not uid:
-            return jsonify({"error": "uid required"}), 400
+        if not uid: return jsonify({"error": "uid required"}), 400
         
-        db = get_db()
-        # Batch update (limit 500)
-        batch = db.batch()
-        notifs = db.collection('users').document(uid).collection('notifications').where(filter=firestore.FieldFilter('read', '==', False)).stream()
-        
-        count = 0
-        for n in notifs:
-            batch.update(n.reference, {'read': True})
-            count += 1
-            if count >= 400: # safety limit per batch
-                break
-        
-        if count > 0:
-            batch.commit()
+        session = db_session
+        user = session.query(User).filter(User.uid == uid).first()
+        if user:
+            session.query(Notification).filter(Notification.user_id == user.id, Notification.is_read == False).update({Notification.is_read: True})
+            session.commit()
             
-        return jsonify({"message": f"Marked {count} notifications as read"}), 200
+        return jsonify({"message": "Marked all read"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500

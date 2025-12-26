@@ -1,6 +1,6 @@
 from flask import Flask
 from flask_cors import CORS
-from lib.core.utils.firebase_config import initialize_firebase
+
 from lib.features.auth.routes import auth_bp
 # --- ADD THIS IMPORT ---
 from lib.features.feed.routes import feed_bp 
@@ -25,7 +25,7 @@ CORS(app, resources={
     }
 })
 
-initialize_firebase()
+
 
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
 # --- ADD THIS REGISTRATION ---

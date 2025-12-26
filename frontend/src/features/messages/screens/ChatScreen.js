@@ -1,80 +1,69 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Image, SafeAreaView } from 'react-native';
+import { View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Image, SafeAreaView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import client from '../../../core/api/client';
 import { getCurrentUserId } from '../../../core/auth';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../../core/design/Theme';
-import { getDb } from '../../../core/firebase/firebase';
-import { doc, onSnapshot, collection, addDoc, serverTimestamp, updateDoc, query, orderBy } from 'firebase/firestore';
 
 export default function ChatScreen({ route, navigation }) {
-  const { thread, threadId, name, avatar, otherUid } = route.params || {};
+  const { threadId, name, avatar, otherUid } = route.params || {};
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [uid, setUid] = useState(null);
+  const [loading, setLoading] = useState(false);
   const flatListRef = useRef();
-
-  // Determine effective Thread ID
-  // If passed directly, use it. If passing user objects, construct it (if 1-on-1).
-  // Ideally, backend or previous screen solves this, but we handle fallback.
-  const effectiveThreadId = thread?.id || threadId; 
-  // If we don't have a threadID yet (e.g. from NewMessage 1-on-1 start where we computed it), we use that.
 
   useEffect(() => {
     loadUser();
   }, []);
+
+  useEffect(() => {
+    if (threadId) {
+      loadMessages();
+      // Poll for new messages every 3 seconds
+      const interval = setInterval(loadMessages, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [threadId]);
 
   const loadUser = async () => {
     const u = await getCurrentUserId();
     setUid(u);
   };
 
-  useEffect(() => {
-    if (!effectiveThreadId) return;
-
-    const db = getDb();
-    const q = query(
-      collection(db, 'messages', effectiveThreadId, 'chat'), 
-      orderBy('timestamp', 'desc')
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setMessages(msgs);
-    });
-
-    return unsubscribe;
-  }, [effectiveThreadId]);
+  const loadMessages = async () => {
+    try {
+      const res = await client.get(`/messages/thread/${threadId}`);
+      if (res.data && res.data.messages) {
+        setMessages(res.data.messages);
+      }
+    } catch (e) {
+      console.log("Error fetching messages:", e);
+    }
+  };
 
   const sendMessage = async () => {
-    if (!input.trim() || !uid || !effectiveThreadId) return;
+    if (!input.trim() || !uid || !threadId) return;
 
     const text = input.trim();
     setInput('');
 
+    // Optimistic Update (Optional, simpler to just refetch)
+    // const newMsg = {
+    //   id: Date.now().toString(),
+    //   text,
+    //   senderId: uid,
+    //   timestamp: new Date().toISOString(),
+    //   type: 'text'
+    // };
+    // setMessages(prev => [newMsg, ...prev]);
+
     try {
-      const db = getDb();
-      // Add message
-      await addDoc(collection(db, 'messages', effectiveThreadId, 'chat'), {
-        text,
-        senderId: uid,
-        timestamp: serverTimestamp(),
-        type: 'text'
+      await client.post('/messages/send', {
+        conversation_id: threadId,
+        text: text
       });
-
-      // Update thread last message
-      await updateDoc(doc(db, 'messages', effectiveThreadId), {
-        lastMessage: {
-          text,
-          timestamp: new Date(), // Client side est, server timestamp better but this is quick update
-          senderId: uid
-        },
-        updatedAt: serverTimestamp()
-      });
-
+      loadMessages(); // Fetch immediately to get server ID and timestamp
     } catch (e) {
       console.error(e);
       alert('Failed to send message');
@@ -82,28 +71,30 @@ export default function ChatScreen({ route, navigation }) {
   };
 
   const renderItem = ({ item }) => {
+    // senderId from backend is user.uid. uid state is also user.uid.
     const isMe = item.senderId === uid;
+
     return (
       <View style={[styles.msgContainer, isMe ? styles.msgRight : styles.msgLeft]}>
         {!isMe && (
-           <Image
-             source={{ uri: avatar || 'https://picsum.photos/40/40' }}
-             style={styles.avatarSmall}
-           />
+          <Image
+            source={{ uri: item.avatar || avatar || 'https://picsum.photos/40/40' }}
+            style={styles.avatarSmall}
+          />
         )}
         <View style={[styles.bubble, isMe ? styles.bubbleRight : styles.bubbleLeft]}>
           <Text style={[styles.msgText, isMe ? styles.textRight : styles.textLeft]}>
             {item.text}
           </Text>
           <Text style={[styles.timeText, isMe ? styles.timeRight : styles.timeLeft]}>
-              {item.timestamp?.seconds ? new Date(item.timestamp.seconds * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '...'}
+            {item.timestamp ? new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}
           </Text>
         </View>
       </View>
     );
   };
 
-  const headerName = thread?.name || name || 'Chat';
+  const headerName = name || 'Chat';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -111,15 +102,15 @@ export default function ChatScreen({ route, navigation }) {
         <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 8 }}>
           <Ionicons name="arrow-back" size={24} color={COLORS.text.primary} />
         </TouchableOpacity>
-        <Image 
-            source={{ uri: thread?.avatar || avatar || 'https://picsum.photos/40/40' }} 
-            style={styles.headerAvatar} 
+        <Image
+          source={{ uri: avatar || 'https://picsum.photos/40/40' }}
+          style={styles.headerAvatar}
         />
-        <View style={{flex: 1, marginLeft: 10}}>
-            <Text style={styles.headerTitle} numberOfLines={1}>{headerName}</Text>
+        <View style={{ flex: 1, marginLeft: 10 }}>
+          <Text style={styles.headerTitle} numberOfLines={1}>{headerName}</Text>
         </View>
         <TouchableOpacity style={{ padding: 8 }}>
-            <Ionicons name="ellipsis-vertical" size={24} color={COLORS.text.primary} />
+          <Ionicons name="ellipsis-vertical" size={24} color={COLORS.text.primary} />
         </TouchableOpacity>
       </View>
 
@@ -127,15 +118,15 @@ export default function ChatScreen({ route, navigation }) {
         ref={flatListRef}
         data={messages}
         renderItem={renderItem}
-        keyExtractor={item => item.id}
-        inverted // Show newest at bottom (standard chat UI)
+        keyExtractor={item => item.id.toString()}
+        inverted // Show newest at bottom (backend returns desc, reverse ordered)
         contentContainerStyle={{ padding: SPACING.m }}
       />
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
         <View style={styles.inputContainer}>
           <TouchableOpacity style={styles.attachBtn}>
-              <Ionicons name="add" size={24} color={COLORS.primary} />
+            <Ionicons name="add" size={24} color={COLORS.primary} />
           </TouchableOpacity>
           <TextInput
             style={styles.input}
@@ -166,13 +157,13 @@ const styles = StyleSheet.create({
   },
   headerAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#ddd' },
   headerTitle: { fontSize: 18, fontWeight: '600', color: COLORS.text.primary },
-  
+
   msgContainer: { flexDirection: 'row', marginBottom: 12, alignItems: 'flex-end' },
   msgRight: { justifyContent: 'flex-end' },
   msgLeft: { justifyContent: 'flex-start' },
-  
+
   avatarSmall: { width: 32, height: 32, borderRadius: 16, marginRight: 8, marginBottom: 4 },
-  
+
   bubble: {
     maxWidth: '75%',
     padding: 12,
@@ -188,7 +179,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 4,
     ...SHADOWS.light,
   },
-  
+
   msgText: { fontSize: 16 },
   textLeft: { color: COLORS.text.primary },
   textRight: { color: 'white' },

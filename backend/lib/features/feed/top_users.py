@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify
-from lib.core.utils.firebase_config import get_db
-from firebase_admin import firestore
+from lib.db.database import db_session
+from lib.db.models import User
 
 top_users_bp = Blueprint('top_users', __name__)
 
@@ -8,28 +8,21 @@ top_users_bp = Blueprint('top_users', __name__)
 def get_top_users():
     """Get top users for the leaderboard/suggestions"""
     try:
-        db = get_db()
-        # Query top 10 users. In a real app, you'd index 'xp' or 'reputation'
-        # For now, we'll just fetch a few and sort in memory or use a simple query
-        users_ref = db.collection('users').limit(20).stream()
+        session = db_session
+        users = session.query(User).order_by(User.xp_points.desc()).limit(10).all()
         
-        users = []
-        for doc in users_ref:
-            u = doc.to_dict()
-            users.append({
-                'id': doc.id,
-                'name': u.get('name', 'User'),
-                'avatar': u.get('avatar_url', 'https://via.placeholder.com/150'),
-                'title': u.get('headline') or u.get('role', 'Student'),
-                'xp': u.get('xp', 0),
-                'followers': len(u.get('followers', [])) if isinstance(u.get('followers'), list) else 0
+        out = []
+        for u in users:
+            out.append({
+                'id': u.uid, # Use UID for frontend compatibility
+                'name': u.full_name or u.username,
+                'avatar': u.avatar_url or 'https://via.placeholder.com/150',
+                'title': u.role, # or headline?
+                'xp': u.xp_points,
+                'followers': 0 # Need relationship count if available
             })
-        
-        # Sort by XP descending
-        users.sort(key=lambda x: x.get('xp', 0), reverse=True)
-        
-        # Return top 10
-        return jsonify(users[:10]), 200
+            
+        return jsonify(out), 200
 
     except Exception as e:
         print(f"Error fetching top users: {e}")

@@ -19,7 +19,7 @@ def get_enhanced_profile(user_id):
         proj_count = session.query(Project).filter(Project.owner_id == user.id).count() or 0
         post_count = session.query(Post).filter(Post.author_id == user.id).count() or 0
         
-        # Likes calc (rough)
+        # Likes calc (rough, can be optimized later or add User.total_likes_received)
         total_likes = 0
         user_posts = session.query(Post).filter(Post.author_id == user.id).all()
         for p in user_posts:
@@ -27,19 +27,20 @@ def get_enhanced_profile(user_id):
 
         # 2. XP Logic
         calculated_xp = 100 + (proj_count * 50) + (post_count * 10) + (total_likes * 5)
-        # Assuming user has `xp_points` column updated by background jobs or triggers, but we can calc on fly
         current_xp = user.xp_points if user.xp_points else calculated_xp
         
         level = int(current_xp / 1000) + 1
         
         stats = {
-            'views': user.views_count if hasattr(user, 'views_count') else 0, # Add views_count to User model if missing or use mock
+            'views': user.views_count if hasattr(user, 'views_count') else 0, 
             'collaborations': proj_count,
             'likes': total_likes,
+            'followers': user.followers_count or 0,
+            'following': user.following_count or 0,
             'reputation': int(current_xp / 10)
         }
         
-        # Default mock badges if none (we haven't implemented badge table yet)
+        # Default mock badges if none
         badges = [
              {'id': 'early', 'icon': '🚀', 'name': 'Early Adopter'}
         ]

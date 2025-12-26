@@ -425,7 +425,7 @@ def add_comment(post_id, decoded_token=None):
 
         new_comment = Comment(
             post_id=post_id,
-            author_id=user.id,
+            user_id=user.id,
             content=text,
             parent_id=parent_id,
             created_at=datetime.datetime.utcnow()
@@ -470,8 +470,23 @@ def add_comment(post_id, decoded_token=None):
 
         session.commit()
         
-        return jsonify({"message": "Comment added"}), 201
-    except Exception as e: return jsonify({"error": str(e)}), 500
+        # Return full comment object for UI to display immediately
+        return jsonify({
+            "message": "Comment added",
+            "comment": {
+                'id': new_comment.id,
+                'text': new_comment.content,
+                'author_name': user.full_name,
+                'author_avatar': user.avatar_url,
+                'author_uid': user.uid,
+                'timestamp': new_comment.created_at.isoformat(),
+                'parent_id': new_comment.parent_id,
+                'replies': []
+            }
+        }), 201
+    except Exception as e: 
+        session.rollback()
+        return jsonify({"error": str(e)}), 500
 
 @feed_bp.route('/<int:post_id>/polls/vote', methods=['POST'])
 @require_auth
