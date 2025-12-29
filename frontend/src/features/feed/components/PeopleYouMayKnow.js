@@ -33,20 +33,30 @@ export default function PeopleYouMayKnow({ vertical = false }) {
                     <Image source={{ uri: item.avatar }} style={styles.avatar} />
                 ) : (
                     <View style={[styles.avatar, { backgroundColor: COLORS.primary }]}>
-                         <Text style={{color: 'white', fontWeight: 'bold', fontSize: 20}}>
-                             {item.name[0]}
-                         </Text>
+                        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 20 }}>
+                            {item.name[0]}
+                        </Text>
                     </View>
                 )}
             </View>
-            <View style={{flex: 1, alignItems: vertical ? 'flex-start' : 'center'}}>
+            <View style={{ flex: 1, alignItems: vertical ? 'flex-start' : 'center' }}>
                 <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
                 <Text style={styles.role} numberOfLines={1}>{item.title || 'Student'}</Text>
             </View>
-            
-            <TouchableOpacity style={styles.connectBtn}>
+
+            <TouchableOpacity
+                style={styles.connectBtn}
+                onPress={async () => {
+                    try {
+                        const uid = await import('../../../core/auth').then(m => m.getCurrentUserId());
+                        if (uid) await client.post('/social/follow', { follower: uid, followee: item.uid || item.id });
+                        // Optimistic update could happen here or parent refresh
+                        alert('Followed ' + item.name);
+                    } catch (e) { console.error(e); }
+                }}
+            >
                 <Ionicons name="person-add-outline" size={16} color={COLORS.primary} />
-                <Text style={styles.connectText}>Connect</Text>
+                <Text style={styles.connectText}>Follow</Text>
             </TouchableOpacity>
         </View>
     );

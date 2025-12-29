@@ -158,6 +158,23 @@ def send_message(decoded_token=None):
         conversation.last_message_preview = text[:50]
         conversation.last_message_at = datetime.utcnow()
         
+        # Create Notification for Recipient(s)
+        # For Direct: other user. For Group: all others.
+        from lib.db.models import Notification
+        for p in conversation.participants:
+            if p.id != user.id:
+                notif = Notification(
+                    recipient_id=p.id,
+                    sender_id=user.id,
+                    type='message',
+                    title=f"New Message from {user.full_name}",
+                    body=text[:100],
+                    reference_id=conversation.id,
+                    reference_type='conversation',
+                    created_at=datetime.utcnow()
+                )
+                session.add(notif)
+        
         session.commit()
         
         return jsonify({

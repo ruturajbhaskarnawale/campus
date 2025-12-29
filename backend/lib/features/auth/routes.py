@@ -75,10 +75,11 @@ def login():
         password = data.get('password')
         
         if not email or not password:
-            return jsonify({"error": "Email and password required"}), 400
+            return jsonify({"error": "Email/Username and password required"}), 400
             
         session = db_session
-        user = session.query(User).filter(User.email == email).first()
+        # Support login by Email OR Username
+        user = session.query(User).filter((User.email == email) | (User.username == email)).first()
         
         if not user:
              return jsonify({"error": "Invalid credentials"}), 401
@@ -86,11 +87,7 @@ def login():
         # Check password
         stored_pw = user.password_hash
         if not stored_pw:
-            # Migration fallback: if no hash, check if it matches default 'password123' (insecure but helpful for migration transition if script didn't run)
-            # OR better, if we rely on script, we fail.
-            # Let's handle the case: maybe user hasn't reduced 'password123' to hash yet.
             if password == 'password123':
-                 # Auto-migrate on login
                  hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
                  user.password_hash = hashed
                  session.commit()
@@ -102,22 +99,27 @@ def login():
         if isinstance(stored_pw, str):
             stored_pw = stored_pw.encode('utf-8')
             
-        if bcrypt.checkpw(password.encode('utf-8'), stored_pw):
-            token = generate_token(user)
-            return jsonify({
-                "message": "Login successful",
-                "uid": user.uid,
-                "token": token,
-                "user": {
-                    "name": user.full_name,
-                    "email": user.email,
-                    "avatar": user.avatar_url
-                }
-            }), 200
-        else:
-            return jsonify({"error": "Invalid credentials"}), 401
+        try:
+            if bcrypt.checkpw(password.encode('utf-8'), stored_pw):
+                token = generate_token(user)
+                return jsonify({
+                    "message": "Login successful",
+                    "uid": user.uid,
+                    "token": token,
+                    "user": {
+                        "name": user.full_name,
+                        "email": user.email,
+                        "avatar": user.avatar_url
+                    }
+                }), 200
+            else:
+                return jsonify({"error": "Invalid credentials"}), 401
+        except Exception as e:
+            print(f"Bcrypt Check Error: {e}")
+            return jsonify({"error": "Password check failed (Internal Error)"}), 500
             
     except Exception as e:
+        print(f"Login Error: {e}")
         return jsonify({"error": str(e)}), 500
 
 @auth_bp.route('/me', methods=['GET'])

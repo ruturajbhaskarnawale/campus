@@ -1,185 +1,232 @@
-
-import sys
-import os
-from datetime import datetime, timedelta
-import bcrypt
-import json
+from lib.db.database import init_db, db_session, engine
+from lib.db.models import User, Post, Comment, Notification, Follow, Conversation, Message, AppSettings
+from werkzeug.security import generate_password_hash
+import datetime
 import random
 
-# Add backend directory to python path
-sys.path.append(os.getcwd())
-
-from lib.db.database import init_db, db_session
-from lib.db.models import User, Post, Project, Comment, PostLike, Notification
-
 def seed_data():
-    session = db_session
     print(">> Seeding Data...")
+    session = db_session
+    
+    # 1. Clear Data
+    print("   Clearing existing data...")
+    meta = User.metadata
+    for table in reversed(meta.sorted_tables):
+        session.execute(table.delete())
+    session.commit()
+    
+    # 2. Create Users
+    print("   Creating Users...")
+    users = []
+    
+    # User 1: Current User (The one usually logged in for demo)
+    me = User(
+        uid="user_123", # Fixed UID for easy login
+        username="alex_dev",
+        email="alex@campus.edu",
+        password_hash=generate_password_hash("password"),
+        full_name="Alex Designer",
+        bio="Creative Developer & UI/UX Enthusiast. Building things that matter.",
+        avatar_url="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
+        cover_photo_url="https://images.unsplash.com/photo-1550684848-fac1c5b4e853?ixlib=rb-1.2.1&auto=format&fit=crop&w=1200&q=80",
+        role="Student",
+        university="Stanford University",
+        xp_points=1250,
+        level=5
+    )
+    users.append(me)
 
-    # 1. Users
-    users = [
+    # Other Realistic Users
+    profiles = [
         {
-            "uid": "uid_test_user",
-            "email": "test@university.edu",
-            "password": "password123", # Simple password
-            "name": "Test User",
-            "role": "Student",
-            "avatar": "https://ui-avatars.com/api/?name=Test+User&background=0D8ABC&color=fff" 
+            "uid": "u_sarah",
+            "name": "Sarah Chen",
+            "email": "sarah@campus.edu",
+            "bio": "AI Researcher | Python | Pytorch. Looking for collaborators on NLP projects.",
+            "avatar": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
+            "role": "Student"
         },
         {
-            "uid": "uid_jane_doe",
-            "email": "jane@university.edu",
-            "name": "Jane Doe",
-            "role": "Student",
-            "avatar": "https://i.pravatar.cc/150?u=jane"
+            "uid": "u_mike",
+            "name": "Mike Ross",
+            "email": "mike@campus.edu",
+            "bio": "Full Stack Dev. React Native & Node.js expert.",
+            "avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
+            "role": "Alumni"
         },
         {
-            "uid": "uid_john_smith",
-            "email": "john@university.edu",
-            "name": "John Smith",
-            "role": "Alumini",
-            "avatar": "https://i.pravatar.cc/150?u=john"
+            "uid": "u_emily",
+            "name": "Emily Watson",
+            "email": "emily@campus.edu",
+            "bio": "Product Manager @ TechCorp. Mentoring students.",
+            "avatar": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
+            "role": "Professor"
+        },
+        {
+            "uid": "u_david",
+            "name": "David Kim",
+            "email": "david@campus.edu",
+            "bio": "Hackathon Addict. Blockchain & Web3.",
+            "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
+            "role": "Student"
         }
     ]
-
-    db_users = {}
     
-    for u in users:
-        existing = session.query(User).filter_by(email=u['email']).first()
-        if existing:
-            # Update password just in case
-            hashed = bcrypt.hashpw(u.get('password', 'password123').encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-            existing.password_hash = hashed
-            db_users[u['email']] = existing
-            print(f"Updated user: {u['email']}")
-        else:
-            # Generate unique username
-            base_username = u['email'].split('@')[0]
-            username = base_username
-            counter = 1
-            while session.query(User).filter_by(username=username).first():
-                username = f"{base_username}{counter}"
-                counter += 1
-
-            hashed = bcrypt.hashpw(u.get('password', 'password123').encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-            new_user = User(
-                uid=u['uid'],
-                email=u['email'],
-                username=username,
-                full_name=u['name'],
-                password_hash=hashed,
-                role=u['role'],
-                avatar_url=u['avatar'],
-                xp_points=random.randint(50, 500)
+    for p in profiles:
+        u = User(
+            uid=p['uid'],
+            username=p['email'].split('@')[0],
+            email=p['email'],
+            password_hash=generate_password_hash("password"),
+            full_name=p['name'],
+            bio=p['bio'],
+            avatar_url=p['avatar'],
+            role=p['role'],
+            university="MIT" if random.choice([True, False]) else "Berkeley",
+            xp_points=random.randint(100, 2000)
+        )
+        users.append(u)
+        
+    session.add_all(users)
+    session.commit()
+    
+    # Re-fetch users to get IDs
+    all_users = session.query(User).all()
+    user_map = {u.uid: u for u in all_users}
+    me_user = user_map['user_123']
+    others = [u for u in all_users if u.id != me_user.id]
+    
+    # 3. Create Posts
+    print("   Creating Posts...")
+    posts = []
+    
+    post_contents = [
+        {"title": "Launched my new Portfolio!", "body": "Just deployed my personal site using Next.js and Tailwind. Check it out! Feedback welcome.", "type": "post"},
+        {"title": "Looking for team members", "body": "Building a decentralized voting app. Need a smart contract dev and a frontend wizard.", "type": "project"},
+        {"title": "Thoughts on AI Ethics", "body": "The rapid advancement of LLMs raises serious questions about bias and alignment. Here are my thoughts...", "type": "thought"},
+        {"title": "Campus Hackathon 2025", "body": "Who's going to the hackathon next month? Let's form a team!", "type": "event"}
+    ]
+    
+    for u in all_users:
+        # Each user creates 1-2 posts
+        for _ in range(random.randint(1, 2)):
+            content = random.choice(post_contents)
+            p = Post(
+                author_id=u.id,
+                title=content['title'],
+                content_body=content['body'],
+                type=content['type'],
+                likes_count=random.randint(0, 50),
+                created_at=datetime.datetime.utcnow() - datetime.timedelta(days=random.randint(0, 10))
             )
-            session.add(new_user)
-            db_users[u['email']] = new_user
-            print(f"Created user: {u['email']} (username: {username})")
-    
+            posts.append(p)
+            
+    session.add_all(posts)
     session.commit()
     
-    main_user = db_users["test@university.edu"]
-    jane = db_users["jane@university.edu"]
-    john = db_users["john@university.edu"]
-
-    # 2. Posts & Polls
-    # Clean up existing posts to avoid duplicates if re-running partially? 
-    # For now, let's just append.
-    
-    # Post 1: Poll
-    poll_post = Post(
-        author_id=jane.id,
-        title="Best Programming Language for 2025?",
-        content_body="I'm starting a new project and can't decide. Vote below!",
-        type="post",
-        created_at=datetime.utcnow(),
-        poll_data_json={
-            "question": "Which language should I use?",
-            "options": [
-                {"id": 0, "text": "Python", "votes": 5},
-                {"id": 1, "text": "Rust", "votes": 12},
-                {"id": 2, "text": "Go", "votes": 8},
-                {"id": 3, "text": "TypeScript", "votes": 15}
-            ],
-            "voters": []
-        },
-        likes_count=45,
-        comments_count=2,
-        views_count=120
-    )
-    session.add(poll_post)
-    
-    # Post 2: Project with Media
-    project_post = Post(
-        author_id=john.id,
-        title="Campus AI Assistant",
-        content_body="Building an AI to help students navigate campus. Looking for ML engineers and Frontend devs. \n\n```python\nimport tensorflow as tf\nmodel = tf.keras.models.Sequential()\n```",
-        type="project",
-        media_urls_json=[
-            "https://images.unsplash.com/photo-1555949963-ff9fe0c870eb?auto=format&fit=crop&w=800&q=80",
-            "https://images.unsplash.com/photo-1550439062-609e15333758?auto=format&fit=crop&w=800&q=80"
-        ],
-        tags_json=["AI", "Python", "React Native"],
-        created_at=datetime.utcnow() - timedelta(hours=2),
-        likes_count=12,
-        comments_count=0
-    )
-    # create associated project
-    project_details = Project(
-        owner_id=john.id,
-        status="recruiting",
-        skills_required_json=["Python", "TensorFlow", "React"]
-    )
-    project_post.project = project_details
-    session.add(project_post)
-
-    # Post 3: Simple Status
-    status_post = Post(
-        author_id=main_user.id,
-        title="Just launched my portfolio!",
-        content_body="Check it out at https://ruturaj.dev. Feedback welcome! #webdev #portfolio",
-        type="post",
-        created_at=datetime.utcnow() - timedelta(days=1),
-        likes_count=5,
-        comments_count=1
-    )
-    session.add(status_post)
-    
-    session.commit()
-
-    # 3. Interconnectivity (Likes, Comments)
-    
-    # Jane likes John's project with 'celebrate'
-    like1 = PostLike(user_id=jane.id, post_id=project_post.id, reaction_type="celebrate")
-    session.add(like1)
-    
-    # Test User likes Jane's poll
-    like2 = PostLike(user_id=main_user.id, post_id=poll_post.id, reaction_type="like")
-    session.add(like2)
-    
-    # Nested Comments: John replies to Jane's Poll
-    c1 = Comment(
-        post_id=poll_post.id,
-        author_id=john.id,
-        content="Definitely Rust for performance!",
-        created_at=datetime.utcnow() - timedelta(minutes=30)
-    )
-    session.add(c1)
+    # 4. Create Follows (Social Graph)
+    print("   Creating Connections...")
+    # Me follows some, some follow Me
+    for o in others:
+        # Me -> Other
+        if random.choice([True, False]):
+            f = Follow(follower_id=me_user.id, followed_id=o.id)
+            session.add(f)
+            me_user.following_count = (me_user.following_count or 0) + 1
+            o.followers_count = (o.followers_count or 0) + 1
+            
+            # Notif
+            n = Notification(
+                recipient_id=o.id,
+                sender_id=me_user.id,
+                type='follow',
+                title='New Follower',
+                body=f"{me_user.full_name} followed you.",
+                created_at=datetime.datetime.utcnow()
+            )
+            session.add(n)
+            
+        # Other -> Me
+        if random.choice([True, False]):
+            f = Follow(follower_id=o.id, followed_id=me_user.id)
+            session.add(f)
+            o.following_count = (o.following_count or 0) + 1
+            me_user.followers_count = (me_user.followers_count or 0) + 1
+            
+            # Notif
+            n = Notification(
+                recipient_id=me_user.id,
+                sender_id=o.id,
+                type='follow',
+                title='New Follower',
+                body=f"{o.full_name} followed you.",
+                created_at=datetime.datetime.utcnow()
+            )
+            session.add(n)
+            
     session.commit()
     
-    # Test User replies to John
-    c2 = Comment(
-        post_id=poll_post.id,
-        author_id=main_user.id,
-        content="But the ecosystem is smaller?",
-        parent_id=c1.id, # Nested
-        created_at=datetime.utcnow() - timedelta(minutes=10)
-    )
-    session.add(c2)
+    # 5. Create Messages
+    print("   Creating Messages...")
+    # Chat with Sarah
+    sarah = user_map.get('u_sarah')
+    if sarah:
+        convo = Conversation(type='direct', created_at=datetime.datetime.utcnow())
+        convo.participants = [me_user, sarah]
+        session.add(convo)
+        session.flush()
+        
+        msgs = [
+            (sarah, "Hey Alex, saw your portfolio. Looks great!"),
+            (me_user, "Thanks Sarah! Appreciate it."),
+            (sarah, "are you free to catch up later?"),
+            (me_user, "Sure, let's meet at the cafe.")
+        ]
+        
+        for sender, txt in msgs:
+            m = Message(
+                conversation_id=convo.id,
+                sender_id=sender.id,
+                content=txt,
+                created_at=datetime.datetime.utcnow()
+            )
+            session.add(m)
+            convo.last_message_preview = txt
+            convo.last_message_at = datetime.datetime.utcnow()
+            
+    # Chat with Mike (Group maybe?)
+    mike = user_map.get('u_mike')
+    if mike:
+         convo2 = Conversation(type='direct', created_at=datetime.datetime.utcnow())
+         convo2.participants = [me_user, mike]
+         session.add(convo2)
+         session.flush()
+         
+         m = Message(
+             conversation_id=convo2.id,
+             sender_id=mike.id,
+             content="Bro, check this repo out.",
+             created_at=datetime.datetime.utcnow()
+         )
+         session.add(m)
+         convo2.last_message_preview = "Bro, check this repo out."
+         convo2.last_message_at = datetime.datetime.utcnow()
+         
+         # Unread notif for me
+         n = Notification(
+             recipient_id=me_user.id,
+             sender_id=mike.id,
+             type='message',
+             title=f"New Message from {mike.full_name}",
+             body="Bro, check this repo out.",
+             reference_id=convo2.id,
+             reference_type='conversation',
+             created_at=datetime.datetime.utcnow()
+         )
+         session.add(n)
+         
     session.commit()
-    
     print(">> Data Seeded Successfully!")
-    print(f">> Login with: test@university.edu / password123")
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     seed_data()

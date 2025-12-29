@@ -106,6 +106,28 @@ def get_contribution_graph(user_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@profile_bp.route('/<user_id>', methods=['GET'])
+def get_profile(user_id):
+    try:
+        session = db_session
+        user = session.query(User).filter(User.uid == user_id).first()
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+            
+        return jsonify({
+            'uid': user.uid,
+            'name': user.full_name,
+            'username': user.username,
+            'avatar': user.avatar_url,
+            'bio': user.bio,
+            'role': user.role,
+            'followers_count': user.followers_count,
+            'following_count': user.following_count,
+            'xp_points': user.xp_points
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @profile_bp.route('/<user_id>/skills', methods=['GET'])
 def get_skills(user_id):
     try:

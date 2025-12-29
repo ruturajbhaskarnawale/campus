@@ -48,7 +48,7 @@ export default function SearchScreen({ navigation }) {
   const [selectedItems, setSelectedItems] = useState([]);
   const [searchTime, setSearchTime] = useState(0);
   const [currentUserId, setCurrentUserId] = useState(null);
-  
+
   const searchTimeout = useRef(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
@@ -76,6 +76,7 @@ export default function SearchScreen({ navigation }) {
       setCurrentUserId(uid);
       loadRecentSearches();
       loadTrendingSearches();
+      performSearch(''); // Load initial suggestions
     } catch (error) {
       console.error('Init error:', error);
     }
@@ -84,17 +85,17 @@ export default function SearchScreen({ navigation }) {
   // Real-time Search with Debouncing
   const handleSearchInput = (text) => {
     setSearchQuery(text);
-    
+
     if (searchTimeout.current) {
       clearTimeout(searchTimeout.current);
     }
-    
+
     if (text.length >= 2) {
       fetchSuggestions(text);
     } else {
       setSuggestions([]);
     }
-    
+
     searchTimeout.current = setTimeout(() => {
       if (text.length >= 2) {
         performSearch(text);
@@ -109,23 +110,25 @@ export default function SearchScreen({ navigation }) {
     try {
       setLoading(true);
       const startTime = Date.now();
-      
+
+      const uid = await getCurrentUserId();
       const params = {
         q: query,
         type: activeTab,
         skills: filters.skills.join(','),
         sort: filters.sortBy,
         year: filters.universityYear,
-        dept: filters.department
+        dept: filters.department,
+        requester_uid: uid // Pass current UID
       };
-      
+
       const response = await client.get('/search/unified', { params });
       const data = response.data;
-      
+
       setResults(data);
       setSearchTime(data.searchTime || Date.now() - startTime);
       saveToRecentSearches(query);
-      
+
     } catch (error) {
       console.error('Search error:', error);
       setResults({ users: [], projects: [], posts: [], total: 0 });
@@ -134,72 +137,29 @@ export default function SearchScreen({ navigation }) {
     }
   };
 
-  // Fetch Suggestions
-  const fetchSuggestions = async (partial) => {
-    try {
-      const response = await client.get('/search/suggestions', {
-        params: { q: partial }
-      });
-      setSuggestions(response.data.suggestions || []);
-    } catch (error) {
-      console.error('Suggestions error:', error);
-      setSuggestions([]);
-    }
-  };
-
-  // Recent Searches
-  const loadRecentSearches = async () => {
-    try {
-      const stored = await AsyncStorage.getItem('recentSearches');
-      if (stored) {
-        setRecentSearches(JSON.parse(stored));
-      }
-    } catch (error) {
-      console.error('Load recent searches error:', error);
-    }
-  };
-
-  const saveToRecentSearches = async (query) => {
-    try {
-      let recent = [...recentSearches];
-      recent = recent.filter(q => q !== query);
-      recent.unshift(query);
-      recent = recent.slice(0, 10);
-      setRecentSearches(recent);
-      await AsyncStorage.setItem('recentSearches', JSON.stringify(recent));
-    } catch (error) {
-      console.error('Save recent search error:', error);
-    }
-  };
-
-  const clearRecentSearches = async () => {
-    try {
-        setRecentSearches([]);
-        await AsyncStorage.removeItem('recentSearches');
-    } catch (e) {}
-  };
-
-  // Trending Searches
-  const loadTrendingSearches = async () => {
-    try {
-      const response = await client.get('/search/trending');
-      setTrending(response.data.trending || []);
-    } catch (error) {
-      console.error('Trending error:', error);
-      setTrending([]);
-    }
-  };
+  // ... suggestions ...
 
   // Actions
-  const handleFollow = async (userId) => {
+  const handleFollow = async (userId, index) => {
     try {
+      // Optimistic Update
+      const newUsers = [...results.users];
+      const isFollowing = newUsers[index].is_following;
+
+      newUsers[index].is_following = !isFollowing;
+      setResults({ ...results, users: newUsers });
+
       await client.post('/social/follow', {
         follower: currentUserId,
         followee: userId
       });
-      Alert.alert('Success', 'Now following user');
+      // Alert.alert('Success', 'Updated');
     } catch (error) {
       console.error('Follow error:', error);
+      // Revert on error
+      const newUsers = [...results.users];
+      newUsers[index].is_following = !newUsers[index].is_following;
+      setResults({ ...results, users: newUsers });
     }
   };
 
@@ -213,9 +173,9 @@ export default function SearchScreen({ navigation }) {
   // Render Match Score
   const renderMatchScore = (score) => {
     if (!score) return null;
-    
+
     const color = score >= 70 ? colors.success || '#4caf50' : score >= 40 ? colors.warning || '#ff9800' : colors.error || '#f44336';
-    
+
     return (
       <View style={[styles.matchBadge, { backgroundColor: color + '20', borderColor: color }]}>
         <Ionicons name="star" size={12} color={color} />
@@ -250,8 +210,8 @@ export default function SearchScreen({ navigation }) {
             </TouchableOpacity>
           )}
         </View>
-        
-        <TouchableOpacity 
+
+        <TouchableOpacity
           style={styles.filterButton}
           onPress={() => setShowFilters(!showFilters)}
         >
@@ -269,7 +229,7 @@ export default function SearchScreen({ navigation }) {
   // Render Suggestions
   const renderSuggestions = () => {
     if (suggestions.length === 0 || !searchQuery) return null;
-    
+
     return (
       <Animated.View style={[styles.suggestionsContainer, { opacity: fadeAnim, backgroundColor: colors.background.secondary }]}>
         {suggestions.map((suggestion, index) => (
@@ -303,9 +263,9 @@ export default function SearchScreen({ navigation }) {
 
     return (
       <View>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false} 
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
           style={styles.tabsContainer}
           contentContainerStyle={styles.tabsContent}
         >
@@ -313,9 +273,9 @@ export default function SearchScreen({ navigation }) {
             <TouchableOpacity
               key={item.id}
               style={[
-                  styles.tab, 
-                  { backgroundColor: colors.background.tertiary },
-                  activeTab === item.id && { backgroundColor: isDark ? colors.primary + '20' : '#e3f2fd', borderColor: colors.primary }
+                styles.tab,
+                { backgroundColor: colors.background.tertiary },
+                activeTab === item.id && { backgroundColor: isDark ? colors.primary + '20' : '#e3f2fd', borderColor: colors.primary }
               ]}
               onPress={() => {
                 setActiveTab(item.id);
@@ -324,9 +284,9 @@ export default function SearchScreen({ navigation }) {
               activeOpacity={0.7}
             >
               <Text style={[
-                  styles.tabText, 
-                  { color: colors.text.secondary },
-                  activeTab === item.id && { color: colors.primary, fontWeight: '700' }
+                styles.tabText,
+                { color: colors.text.secondary },
+                activeTab === item.id && { color: colors.primary, fontWeight: '700' }
               ]}>
                 {item.label}
               </Text>
@@ -340,7 +300,7 @@ export default function SearchScreen({ navigation }) {
   // Render Filters
   const renderFilters = () => {
     if (!showFilters) return null;
-    
+
     return (
       <Animated.View style={[styles.filtersPanel, { opacity: fadeAnim, backgroundColor: colors.background.secondary }]}>
         <View style={styles.filterHeader}>
@@ -351,143 +311,143 @@ export default function SearchScreen({ navigation }) {
         </View>
 
         <ScrollView style={{ maxHeight: 400 }}>
-            {/* Skills Filter */}
-            <View style={styles.filterSection}>
-              <Text style={[styles.filterLabel, { color: colors.text.secondary }]}>Skills</Text>
-              <View style={[styles.skillsInput, { backgroundColor: colors.background.tertiary }]}>
-                <TextInput
-                  style={[styles.filterInput, { color: colors.text.primary }]}
-                  placeholder="e.g. React, Python..."
-                  placeholderTextColor={colors.text.tertiary}
-                  onSubmitEditing={(e) => {
-                    const skill = e.nativeEvent.text.trim();
-                    if (skill && !filters.skills.includes(skill)) {
-                      setFilters({ ...filters, skills: [...filters.skills, skill] });
-                      e.target.clear();
-                    }
-                  }}
-                />
-              </View>
-              <View style={styles.skillTags}>
-                {filters.skills.map((skill, index) => (
-                  <TouchableOpacity 
-                    key={index} 
-                    style={[styles.skillTag, { backgroundColor: colors.primary + '15' }]} 
-                    onPress={() => setFilters({...filters, skills: filters.skills.filter(s => s !== skill)})}
-                  >
-                     <Text style={[styles.skillTagText, { color: colors.primary }]}>{skill} ×</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+          {/* Skills Filter */}
+          <View style={styles.filterSection}>
+            <Text style={[styles.filterLabel, { color: colors.text.secondary }]}>Skills</Text>
+            <View style={[styles.skillsInput, { backgroundColor: colors.background.tertiary }]}>
+              <TextInput
+                style={[styles.filterInput, { color: colors.text.primary }]}
+                placeholder="e.g. React, Python..."
+                placeholderTextColor={colors.text.tertiary}
+                onSubmitEditing={(e) => {
+                  const skill = e.nativeEvent.text.trim();
+                  if (skill && !filters.skills.includes(skill)) {
+                    setFilters({ ...filters, skills: [...filters.skills, skill] });
+                    e.target.clear();
+                  }
+                }}
+              />
             </View>
-
-            {/* University Year */}
-            <View style={styles.filterSection}>
-                <Text style={[styles.filterLabel, { color: colors.text.secondary }]}>University Year</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap: 8}}>
-                    {['1st Year', '2nd Year', '3rd Year', '4th Year', 'Grad'].map(year => (
-                        <TouchableOpacity 
-                            key={year} 
-                            style={[
-                                styles.filterChip, 
-                                { backgroundColor: colors.background.tertiary },
-                                filters.universityYear === year && { backgroundColor: isDark ? colors.primary + '20' : '#e3f2fd' }
-                            ]}
-                            onPress={() => setFilters({...filters, universityYear: filters.universityYear === year ? null : year})}
-                        >
-                            <Text style={[
-                                styles.filterChipText, 
-                                { color: colors.text.primary },
-                                filters.universityYear === year && { color: colors.primary, fontWeight: '600' }
-                            ]}>{year}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </ScrollView>
-            </View>
-
-            {/* Department */}
-            <View style={styles.filterSection}>
-                <Text style={[styles.filterLabel, { color: colors.text.secondary }]}>Department</Text>
-                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap: 8}}>
-                    {['CS', 'IT', 'E&TC', 'Mech', 'Civil', 'AI&DS'].map(dept => (
-                        <TouchableOpacity 
-                            key={dept} 
-                            style={[
-                                styles.filterChip, 
-                                { backgroundColor: colors.background.tertiary },
-                                filters.department === dept && { backgroundColor: isDark ? colors.primary + '20' : '#e3f2fd' }
-                            ]}
-                            onPress={() => setFilters({...filters, department: filters.department === dept ? null : dept})}
-                        >
-                            <Text style={[
-                                styles.filterChipText, 
-                                { color: colors.text.primary },
-                                filters.department === dept && { color: colors.primary, fontWeight: '600' }
-                            ]}>{dept}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </ScrollView>
-            </View>
-
-            {/* Date Posted */}
-            <View style={styles.filterSection}>
-                <Text style={[styles.filterLabel, { color: colors.text.secondary }]}>Date Posted</Text>
-                <View style={styles.sortOptions}>
-                    {['Any Time', 'Past 24h', 'Past Week', 'Past Month'].map(date => (
-                        <TouchableOpacity 
-                            key={date} 
-                            style={[
-                                styles.sortOption, 
-                                { backgroundColor: colors.background.tertiary },
-                                filters.datePosted === date && { backgroundColor: isDark ? colors.primary + '20' : '#e3f2fd', borderColor: colors.primary }
-                            ]}
-                            onPress={() => setFilters({...filters, datePosted: date})}
-                        >
-                            <Text style={[
-                                styles.sortOptionText, 
-                                { color: colors.text.secondary },
-                                filters.datePosted === date && { color: colors.primary, fontWeight: '600' }
-                            ]}>{date}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-            </View>
-            
-            {/* Sort Options */}
-            <View style={styles.filterSection}>
-              <Text style={[styles.filterLabel, { color: colors.text.secondary }]}>Sort By</Text>
-              <View style={styles.sortOptions}>
-                {['relevance', 'recent', 'popular'].map(sort => (
-                  <TouchableOpacity
-                    key={sort}
-                    style={[
-                      styles.sortOption,
-                      { backgroundColor: colors.background.tertiary },
-                      filters.sortBy === sort && { backgroundColor: isDark ? colors.primary + '20' : '#e3f2fd', borderColor: colors.primary }
-                    ]}
-                    onPress={() => setFilters({ ...filters, sortBy: sort })}
-                  >
-                    <Text style={[
-                      styles.sortOptionText,
-                      { color: colors.text.secondary },
-                      filters.sortBy === sort && { color: colors.primary, fontWeight: '600' }
-                    ]}>
-                      {sort.charAt(0).toUpperCase() + sort.slice(1)}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            {/* Save Search Toggle */}
-            <View style={styles.saveSearchRow}>
-                <Text style={[styles.saveSearchText, { color: colors.text.primary }]}>Alert me for new results</Text>
-                <TouchableOpacity onPress={() => setFilters({...filters, saveSearch: !filters.saveSearch})}>
-                    <Ionicons name={filters.saveSearch ? "toggle" : "toggle-outline"} size={32} color={filters.saveSearch ? colors.primary : colors.text.tertiary} />
+            <View style={styles.skillTags}>
+              {filters.skills.map((skill, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[styles.skillTag, { backgroundColor: colors.primary + '15' }]}
+                  onPress={() => setFilters({ ...filters, skills: filters.skills.filter(s => s !== skill) })}
+                >
+                  <Text style={[styles.skillTagText, { color: colors.primary }]}>{skill} ×</Text>
                 </TouchableOpacity>
+              ))}
             </View>
+          </View>
+
+          {/* University Year */}
+          <View style={styles.filterSection}>
+            <Text style={[styles.filterLabel, { color: colors.text.secondary }]}>University Year</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+              {['1st Year', '2nd Year', '3rd Year', '4th Year', 'Grad'].map(year => (
+                <TouchableOpacity
+                  key={year}
+                  style={[
+                    styles.filterChip,
+                    { backgroundColor: colors.background.tertiary },
+                    filters.universityYear === year && { backgroundColor: isDark ? colors.primary + '20' : '#e3f2fd' }
+                  ]}
+                  onPress={() => setFilters({ ...filters, universityYear: filters.universityYear === year ? null : year })}
+                >
+                  <Text style={[
+                    styles.filterChipText,
+                    { color: colors.text.primary },
+                    filters.universityYear === year && { color: colors.primary, fontWeight: '600' }
+                  ]}>{year}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          {/* Department */}
+          <View style={styles.filterSection}>
+            <Text style={[styles.filterLabel, { color: colors.text.secondary }]}>Department</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+              {['CS', 'IT', 'E&TC', 'Mech', 'Civil', 'AI&DS'].map(dept => (
+                <TouchableOpacity
+                  key={dept}
+                  style={[
+                    styles.filterChip,
+                    { backgroundColor: colors.background.tertiary },
+                    filters.department === dept && { backgroundColor: isDark ? colors.primary + '20' : '#e3f2fd' }
+                  ]}
+                  onPress={() => setFilters({ ...filters, department: filters.department === dept ? null : dept })}
+                >
+                  <Text style={[
+                    styles.filterChipText,
+                    { color: colors.text.primary },
+                    filters.department === dept && { color: colors.primary, fontWeight: '600' }
+                  ]}>{dept}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          {/* Date Posted */}
+          <View style={styles.filterSection}>
+            <Text style={[styles.filterLabel, { color: colors.text.secondary }]}>Date Posted</Text>
+            <View style={styles.sortOptions}>
+              {['Any Time', 'Past 24h', 'Past Week', 'Past Month'].map(date => (
+                <TouchableOpacity
+                  key={date}
+                  style={[
+                    styles.sortOption,
+                    { backgroundColor: colors.background.tertiary },
+                    filters.datePosted === date && { backgroundColor: isDark ? colors.primary + '20' : '#e3f2fd', borderColor: colors.primary }
+                  ]}
+                  onPress={() => setFilters({ ...filters, datePosted: date })}
+                >
+                  <Text style={[
+                    styles.sortOptionText,
+                    { color: colors.text.secondary },
+                    filters.datePosted === date && { color: colors.primary, fontWeight: '600' }
+                  ]}>{date}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* Sort Options */}
+          <View style={styles.filterSection}>
+            <Text style={[styles.filterLabel, { color: colors.text.secondary }]}>Sort By</Text>
+            <View style={styles.sortOptions}>
+              {['relevance', 'recent', 'popular'].map(sort => (
+                <TouchableOpacity
+                  key={sort}
+                  style={[
+                    styles.sortOption,
+                    { backgroundColor: colors.background.tertiary },
+                    filters.sortBy === sort && { backgroundColor: isDark ? colors.primary + '20' : '#e3f2fd', borderColor: colors.primary }
+                  ]}
+                  onPress={() => setFilters({ ...filters, sortBy: sort })}
+                >
+                  <Text style={[
+                    styles.sortOptionText,
+                    { color: colors.text.secondary },
+                    filters.sortBy === sort && { color: colors.primary, fontWeight: '600' }
+                  ]}>
+                    {sort.charAt(0).toUpperCase() + sort.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* Save Search Toggle */}
+          <View style={styles.saveSearchRow}>
+            <Text style={[styles.saveSearchText, { color: colors.text.primary }]}>Alert me for new results</Text>
+            <TouchableOpacity onPress={() => setFilters({ ...filters, saveSearch: !filters.saveSearch })}>
+              <Ionicons name={filters.saveSearch ? "toggle" : "toggle-outline"} size={32} color={filters.saveSearch ? colors.primary : colors.text.tertiary} />
+            </TouchableOpacity>
+          </View>
         </ScrollView>
-        
+
         <TouchableOpacity
           style={styles.applyFiltersButton}
           onPress={() => {
@@ -564,14 +524,14 @@ export default function SearchScreen({ navigation }) {
         )}
 
         <View style={styles.cardActionRow}>
-          <TouchableOpacity 
-            style={[styles.actionBtn, styles.actionBtnPrimary, { backgroundColor: colors.primary }]} 
-            onPress={() => handleFollow(item.uid)}
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.actionBtnPrimary, { backgroundColor: item.is_following ? 'transparent' : colors.primary, borderWidth: 1, borderColor: colors.primary }]}
+            onPress={() => handleFollow(item.uid, index)}
           >
-            <Text style={styles.actionBtnTextPrimary}>Connect</Text>
+            <Text style={[styles.actionBtnTextPrimary, { color: item.is_following ? colors.primary : '#FFF' }]}>{item.is_following ? 'Following' : 'Follow'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.actionBtn, styles.actionBtnSecondary, { backgroundColor: colors.background.tertiary }]} 
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.actionBtnSecondary, { backgroundColor: colors.background.tertiary }]}
             onPress={() => handleMessage(item.uid, item.name)}
           >
             <Ionicons name="chatbubble-outline" size={18} color={colors.text.primary} />
@@ -634,12 +594,12 @@ export default function SearchScreen({ navigation }) {
   // Render Search Stats
   const renderSearchStats = () => {
     if (!searchQuery || results.total === 0) return null;
-    
+
     return (
       <View style={styles.searchStats}>
-         <Text style={[styles.searchStatsSimpleText, { color: colors.text.tertiary }]}>
-            Found {results.total} results in {searchTime}ms
-         </Text>
+        <Text style={[styles.searchStatsSimpleText, { color: colors.text.tertiary }]}>
+          Found {results.total} results in {searchTime}ms
+        </Text>
       </View>
     );
   };
@@ -647,10 +607,10 @@ export default function SearchScreen({ navigation }) {
   // Empty State
   const renderEmptyState = () => {
     if (loading) return null;
-    
+
     if (!searchQuery) {
       return (
-        <ScrollView 
+        <ScrollView
           style={styles.emptyContainer}
           contentContainerStyle={styles.emptyContent}
           showsVerticalScrollIndicator={false}
@@ -663,7 +623,7 @@ export default function SearchScreen({ navigation }) {
           </LinearGradient>
           <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>Discover Amazing Projects</Text>
           <Text style={[styles.emptyText, { color: colors.text.secondary }]}>Search for users, projects, and collaborate!</Text>
-          
+
           {/* Recent Searches */}
           {recentSearches.length > 0 && (
             <View style={styles.recentSection}>
@@ -689,7 +649,7 @@ export default function SearchScreen({ navigation }) {
               ))}
             </View>
           )}
-          
+
           {/* Trending Searches */}
           {trending.length > 0 && (
             <View style={styles.trendingSection}>
@@ -727,7 +687,7 @@ export default function SearchScreen({ navigation }) {
         </ScrollView>
       );
     }
-    
+
     if (results.total === 0) {
       return (
         <View style={styles.emptyContainer}>
@@ -742,7 +702,7 @@ export default function SearchScreen({ navigation }) {
         </View>
       );
     }
-    
+
     return null;
   };
 
@@ -756,17 +716,17 @@ export default function SearchScreen({ navigation }) {
         </View>
       );
     }
-    
-    const dataToShow = activeTab === 'all' 
+
+    const dataToShow = activeTab === 'all'
       ? [...results.users, ...results.projects, ...results.posts]
-      : activeTab === 'users' 
-        ? results.users 
+      : activeTab === 'users'
+        ? results.users
         : activeTab === 'projects'
           ? results.projects
           : results.posts;
-    
+
     if (dataToShow.length === 0) return renderEmptyState();
-    
+
     return (
       <FlatList
         data={dataToShow}
@@ -797,7 +757,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  
+
   // Search Bar
   searchBarContainer: {
     paddingHorizontal: SPACING.m,
@@ -837,7 +797,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  
+
   // Suggestions
   suggestionsContainer: {
     marginHorizontal: SPACING.m,
@@ -857,7 +817,7 @@ const styles = StyleSheet.create({
     marginLeft: SPACING.m,
     fontSize: 14,
   },
-  
+
   // Tabs
   tabsContainer: {
     marginTop: SPACING.s,
@@ -879,7 +839,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
-  
+
   // Filters Panel
   filtersPanel: {
     position: 'absolute',
@@ -932,7 +892,7 @@ const styles = StyleSheet.create({
   // Stats
   searchStats: { paddingHorizontal: SPACING.m, marginVertical: 8 },
   searchStatsSimpleText: { fontSize: 12, textAlign: 'center' },
-  
+
   // Empty State and Trending
   emptyContainer: { flex: 1, paddingTop: 30 },
   emptyContent: { paddingHorizontal: SPACING.m, paddingBottom: 50 },
@@ -958,7 +918,7 @@ const styles = StyleSheet.create({
   resultsContainer: { padding: SPACING.m },
   resultCard: { marginBottom: 16, borderRadius: 16, borderWidth: 1, overflow: 'hidden' },
   cardInner: { padding: 16 },
-  
+
   // User Card
   cardHeaderRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   avatarLarge: { width: 44, height: 44, borderRadius: 22 },
@@ -993,7 +953,7 @@ const styles = StyleSheet.create({
   projectStatText: { fontSize: 12, fontWeight: '600' },
   viewDetailsBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   viewDetailsText: { fontSize: 12, fontWeight: '700' },
-  
+
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 50 },
   loadingText: { marginTop: 10, fontSize: 14 }
 });

@@ -9,7 +9,7 @@ const getApiHost = () => {
     if (__DEV__) {
         // Attempt to get the IP from Expo Constants (works for physical devices via Expo Go)
         const debuggerHost = Constants.expoConfig?.hostUri || Constants.manifest?.debuggerHost;
-        
+
         if (debuggerHost) {
             // Extract IP from "ip:port" string
             return `http://${debuggerHost.split(':')[0]}:5000`;
@@ -20,12 +20,12 @@ const getApiHost = () => {
     if (Platform.OS === 'android') {
         return 'http://10.0.2.2:5000';
     }
-    
+
     return 'http://localhost:5000';
 };
 
 const API_HOST = getApiHost();
-const API_BASE = `${API_HOST}/api`;
+const API_BASE = `${API_HOST}/api`; // This line already adds '/api' to the base URL.
 
 console.log('API Configured:', API_HOST); // Log to help debug
 

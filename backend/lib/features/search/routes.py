@@ -43,17 +43,34 @@ def unified_search():
                         User.username.ilike(f'%{query}%')
                     )
                 ).limit(limit).all()
-                
-                for u in users:
-                    results['users'].append({
-                        'uid': u.uid,
-                        'name': u.full_name,
-                        'username': u.username,
-                        'avatar': u.avatar_url,
-                        'bio': u.bio,
-                        'role': u.role
-                        # Removed stub matchScore
-                    })
+        else:
+            # Empty query - Return suggested/random users
+            if search_type in ['all', 'users']:
+                # Random users or top XP users
+                users = session.query(User).order_by(func.random()).limit(limit).all()
+        
+        # Process Users (Common logic)
+        if 'users' in locals() and users:
+            # Check following status if requester is provided
+            requester_uid = request.args.get('requester_uid')
+            following_ids = set()
+            if requester_uid:
+                requester = session.query(User).filter(User.uid == requester_uid).first()
+                if requester:
+                     from lib.db.models import Follow
+                     follows = session.query(Follow.followed_id).filter(Follow.follower_id == requester.id).all()
+                     following_ids = {f[0] for f in follows}
+
+            for u in users:
+                results['users'].append({
+                    'uid': u.uid,
+                    'name': u.full_name,
+                    'username': u.username,
+                    'avatar': u.avatar_url,
+                    'bio': u.bio,
+                    'role': u.role,
+                    'is_following': u.id in following_ids
+                })
 
             # Search Posts/Projects
             if search_type in ['all', 'projects', 'posts']:

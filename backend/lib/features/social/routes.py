@@ -33,6 +33,21 @@ def follow():
             follower.following_count = (follower.following_count or 0) + 1
             followee.followers_count = (followee.followers_count or 0) + 1
             
+            # Create Notification
+            from lib.db.models import Notification
+            import datetime
+            notif = Notification(
+                recipient_id=followee.id,
+                sender_id=follower.id,
+                type='follow',
+                title='New Follower',
+                body=f"{follower.full_name} started following you.",
+                reference_id=follower.id,
+                reference_type='user',
+                created_at=datetime.datetime.utcnow()
+            )
+            session.add(notif)
+            
             session.commit()
             return jsonify({"message": "Followed", "status": "following"}), 200
         else:
@@ -79,39 +94,53 @@ def followers(user_id):
         user = session.query(User).filter(User.uid == user_id).first()
         if not user: return jsonify([]), 200
         
-        follows = session.query(Follow).filter(Follow.followed_id == user.id).all()
-        # Fetch follower details
+        # Get followers with details
+        # Join Follow and User (follower)
+        followers = session.query(Follow, User).join(User, Follow.follower_id == User.id)\
+            .filter(Follow.followed_id == user.id).all()
+        
         out = []
-        for f in follows:
-             u = session.query(User).get(f.follower_id)
-             if u:
-                 out.append({
-                     'follower': u.uid,
-                     'followee': user_id,
-                     'timestamp': f.created_at.isoformat()
-                 })
+        for f, u in followers:
+             out.append({
+                 'follower': u.uid,
+                 'followee': user_id,
+                 'timestamp': f.created_at.isoformat(),
+                 'uid': u.uid,
+                 'name': u.full_name,
+                 'username': u.username,
+                 'avatar_url': u.avatar_url,
+                 'role': u.role
+             })
         return jsonify(out), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 @social_bp.route('/following/<user_id>', methods=['GET'])
-def following(user_id):
+def get_following(user_id):
     try:
         session = db_session
         user = session.query(User).filter(User.uid == user_id).first()
         if not user: return jsonify([]), 200
 
-        follows = session.query(Follow).filter(Follow.follower_id == user.id).all()
+        # Get following with details
+        # Join Follow and User (followed)
+        following = session.query(Follow, User).join(User, Follow.followed_id == User.id)\
+            .filter(Follow.follower_id == user.id).all()
+            
         out = []
-        for f in follows:
-             u = session.query(User).get(f.followed_id)
-             if u:
-                 out.append({
-                     'follower': user_id,
-                     'followee': u.uid,
-                     'timestamp': f.created_at.isoformat()
-                 })
+        for f, u in following:
+            out.append({
+                'follower': user_id,
+                'followee': u.uid,
+                'timestamp': f.created_at.isoformat(),
+                 # User Details of the person I am following
+                'uid': u.uid,
+                'name': u.full_name,
+                'username': u.username,
+                'avatar_url': u.avatar_url,
+                'role': u.role
+            })
         return jsonify(out), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500

@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import client from '../../../core/api/client';
 import { getCurrentUserId } from '../../../core/auth';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../../core/design/Theme';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function ChatScreen({ route, navigation }) {
   const { threadId, name, avatar, otherUid } = route.params || {};
@@ -82,14 +83,29 @@ export default function ChatScreen({ route, navigation }) {
             style={styles.avatarSmall}
           />
         )}
-        <View style={[styles.bubble, isMe ? styles.bubbleRight : styles.bubbleLeft]}>
-          <Text style={[styles.msgText, isMe ? styles.textRight : styles.textLeft]}>
-            {item.text}
-          </Text>
-          <Text style={[styles.timeText, isMe ? styles.timeRight : styles.timeLeft]}>
-            {item.timestamp ? new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}
-          </Text>
-        </View>
+        {isMe ? (
+          <LinearGradient
+            colors={['#4facfe', '#00f2fe']} // Premium Blue Gradient
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+            style={[styles.bubble, styles.bubbleRight]}
+          >
+            <Text style={[styles.msgText, styles.textRight]}>
+              {item.text}
+            </Text>
+            <Text style={[styles.timeText, styles.timeRight]}>
+              {item.timestamp ? new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}
+            </Text>
+          </LinearGradient>
+        ) : (
+          <View style={[styles.bubble, styles.bubbleLeft]}>
+            <Text style={[styles.msgText, styles.textLeft]}>
+              {item.text}
+            </Text>
+            <Text style={[styles.timeText, styles.timeLeft]}>
+              {item.timestamp ? new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}
+            </Text>
+          </View>
+        )}
       </View>
     );
   };
@@ -175,7 +191,7 @@ const styles = StyleSheet.create({
     ...SHADOWS.light,
   },
   bubbleRight: {
-    backgroundColor: COLORS.primary,
+    // backgroundColor: COLORS.primary, // Handled by Gradient
     borderBottomRightRadius: 4,
     ...SHADOWS.light,
   },

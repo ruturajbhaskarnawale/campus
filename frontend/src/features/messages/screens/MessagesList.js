@@ -6,6 +6,8 @@ import { COLORS, SHADOWS, SPACING, RADIUS, FONTS } from '../../../core/design/Th
 import { getCurrentUserId } from '../../../core/auth';
 import { FeedSkeleton } from '../../../core/widgets/SkeletonLoader';
 
+import { useFocusEffect } from '@react-navigation/native';
+
 export default function MessagesList({ navigation }) {
   const [threads, setThreads] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -20,77 +22,86 @@ export default function MessagesList({ navigation }) {
       // Guard against non-array response
       const data = Array.isArray(res.data) ? res.data : (res.data?.data || []);
       setThreads(Array.isArray(data) ? data : []);
-    } catch (e) { 
+    } catch (e) {
       console.error(e);
       // Fallback for safety
       setThreads([]);
-    } finally { 
-      setLoading(false); 
+    } finally {
+      setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
-  useEffect(() => { fetchThreads(); }, [fetchThreads]);
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchThreads();
+    }, [])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
     fetchThreads();
   };
 
-  const filteredThreads = threads.filter(t => 
-    (t.name || t.id).toLowerCase().includes(q.toLowerCase()) || 
+  const filteredThreads = threads.filter(t =>
+    (t.name || t.id).toLowerCase().includes(q.toLowerCase()) ||
     (t.last || '').toLowerCase().includes(q.toLowerCase())
   );
 
   const formatTime = (iso) => {
-      if (!iso) return '';
-      const date = new Date(iso);
-      const now = new Date();
-      if (date.toDateString() === now.toDateString()) {
-          return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      }
-      return date.toLocaleDateString();
+    if (!iso) return '';
+    const date = new Date(iso);
+    const now = new Date();
+    if (date.toDateString() === now.toDateString()) {
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+    return date.toLocaleDateString();
   };
 
   const renderItem = ({ item }) => (
-    <TouchableOpacity 
-        style={styles.card} 
-        activeOpacity={0.7}
-        onPress={() => navigation.navigate('Chat', { thread: item })}
+    <TouchableOpacity
+      style={styles.card}
+      activeOpacity={0.7}
+      onPress={() => navigation.navigate('Chat', { thread: item })}
     >
-      <View style={styles.avatar}>
-         <Text style={styles.avatarText}>{(item.name || 'U')[0].toUpperCase()}</Text>
-         {/* Online dot simulation */}
-         <View style={styles.onlineDot} />
+      <View style={[styles.avatar, item.unread > 0 && { borderColor: COLORS.primary, borderWidth: 2 }]}>
+        {/* Use Image if available, else Text */}
+        {item.avatar ? (
+          <Image source={{ uri: item.avatar }} style={{ width: 52, height: 52, borderRadius: 26 }} />
+        ) : (
+          <Text style={[styles.avatarText, { color: COLORS.text.secondary }]}>{(item.name || 'U')[0].toUpperCase()}</Text>
+        )}
+        {/* Online dot simulation */}
+        <View style={styles.onlineDot} />
       </View>
-      <View style={{flex: 1, justifyContent: 'center'}}>
-        <View style={{flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4}}>
-           <Text style={styles.name} numberOfLines={1}>{item.name || item.id}</Text>
-           <Text style={styles.time}>{formatTime(item.lastTimestamp)}</Text>
+      <View style={{ flex: 1, justifyContent: 'center' }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+          <Text style={styles.name} numberOfLines={1}>{item.name || item.id}</Text>
+          <Text style={styles.time}>{formatTime(item.lastTimestamp)}</Text>
         </View>
-        <View style={{flexDirection: 'row', justifyContent: 'space-between'}}>
-            <Text numberOfLines={1} style={[styles.lastMsg, item.unread > 0 && styles.lastMsgUnread]}>
-                {item.last || 'Start a conversation'}
-            </Text>
-            {item.unread > 0 && (
-                <View style={styles.badge}>
-                    <Text style={styles.badgeText}>{item.unread}</Text>
-                </View>
-            )}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+          <Text numberOfLines={1} style={[styles.lastMsg, item.unread > 0 && styles.lastMsgUnread]}>
+            {item.last || 'Start a conversation'}
+          </Text>
+          {item.unread > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{item.unread}</Text>
+            </View>
+          )}
         </View>
       </View>
     </TouchableOpacity>
   );
 
   if (loading && !refreshing) {
-      return (
-          <SafeAreaView style={styles.container}>
-              <View style={styles.header}>
-                 <Text style={styles.title}>Messages</Text>
-              </View>
-              <FeedSkeleton />
-          </SafeAreaView>
-      );
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Messages</Text>
+        </View>
+        <FeedSkeleton />
+      </SafeAreaView>
+    );
   }
 
   return (
@@ -99,36 +110,36 @@ export default function MessagesList({ navigation }) {
       <View style={styles.header}>
         <Text style={styles.title}>Messages</Text>
         <TouchableOpacity style={styles.newChatBtn} onPress={() => navigation.navigate('NewMessage')}>
-             <Ionicons name="create-outline" size={24} color={COLORS.primary} />
+          <Ionicons name="create-outline" size={24} color={COLORS.primary} />
         </TouchableOpacity>
       </View>
 
       <View style={styles.searchContainer}>
-         <Ionicons name="search" size={20} color={COLORS.text.tertiary} />
-         <TextInput 
-           style={styles.searchInput} 
-           placeholder="Search chats..." 
-           value={q} 
-           onChangeText={setQ} 
-           placeholderTextColor={COLORS.text.tertiary}
-         />
+        <Ionicons name="search" size={20} color={COLORS.text.tertiary} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search chats..."
+          value={q}
+          onChangeText={setQ}
+          placeholderTextColor={COLORS.text.tertiary}
+        />
       </View>
 
-      <FlatList 
-        data={filteredThreads} 
-        keyExtractor={(i)=>i.id} 
-        renderItem={renderItem} 
+      <FlatList
+        data={filteredThreads}
+        keyExtractor={(i) => i.id}
+        renderItem={renderItem}
         contentContainerStyle={{ padding: SPACING.m }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />}
         ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-                <Ionicons name="chatbubbles-outline" size={80} color={COLORS.border} />
-                <Text style={styles.emptyText}>No messages yet</Text>
-                <Text style={styles.emptySubText}>Start connecting with other students!</Text>
-                <TouchableOpacity style={styles.startBtn} onPress={() => navigation.navigate('Search')}>
-                    <Text style={{color: 'white', fontWeight: 'bold'}}>Find People</Text>
-                </TouchableOpacity>
-            </View>
+          <View style={styles.emptyContainer}>
+            <Ionicons name="chatbubbles-outline" size={80} color={COLORS.border} />
+            <Text style={styles.emptyText}>No messages yet</Text>
+            <Text style={styles.emptySubText}>Start connecting with other students!</Text>
+            <TouchableOpacity style={styles.startBtn} onPress={() => navigation.navigate('Search')}>
+              <Text style={{ color: 'white', fontWeight: 'bold' }}>Find People</Text>
+            </TouchableOpacity>
+          </View>
         }
       />
     </SafeAreaView>
@@ -149,9 +160,9 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 28, fontWeight: '800', color: COLORS.text.primary, letterSpacing: -0.5 },
   newChatBtn: {
-      padding: 8,
-      backgroundColor: COLORS.background.tertiary,
-      borderRadius: RADIUS.round,
+    padding: 8,
+    backgroundColor: COLORS.background.tertiary,
+    borderRadius: RADIUS.round,
   },
   searchContainer: {
     margin: SPACING.m,
@@ -165,34 +176,36 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     padding: SPACING.m,
-    backgroundColor: COLORS.background.card,
-    borderRadius: RADIUS.m,
-    marginBottom: SPACING.s,
-    ...SHADOWS.light,
-    borderWidth: 1,
-    borderColor: 'transparent',
+    backgroundColor: 'transparent',
+    // borderRadius: RADIUS.m, 
+    marginBottom: 0,
+    // ...SHADOWS.light,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
   },
   avatar: {
-    width: 56, 
-    height: 56, 
-    borderRadius: 28, 
-    backgroundColor: COLORS.primaryGradient[0], 
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#eee', // Default gray
     marginRight: 16,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
+    borderWidth: 1,
+    borderColor: '#eee'
   },
-  avatarText: { color: 'white', fontWeight: 'bold', fontSize: 22 },
+  avatarText: { color: '#555', fontWeight: 'bold', fontSize: 22 },
   onlineDot: {
-      position: 'absolute',
-      bottom: 2,
-      right: 2,
-      width: 14,
-      height: 14,
-      borderRadius: 7,
-      backgroundColor: COLORS.success,
-      borderWidth: 2,
-      borderColor: COLORS.background.card,
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: COLORS.success,
+    borderWidth: 2,
+    borderColor: COLORS.background.card,
   },
   name: { fontSize: 16, fontWeight: '700', color: COLORS.text.primary },
   lastMsg: { color: COLORS.text.secondary, fontSize: 14, width: '85%' },

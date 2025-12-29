@@ -40,15 +40,24 @@ def list_notifications(uid):
         user = session.query(User).filter(User.uid == uid).first()
         if not user: return jsonify([]), 200
         
-        notifs = session.query(Notification).filter(Notification.user_id == user.id).order_by(Notification.created_at.desc()).all()
+        # Join with User table to get sender details (for avatar/name in notification)
+        # Assuming sender_id exists in Notification model (step 17 check? previous code shows it)
+        # Let's check model definition if needed. But verify_social_backend created one with sender_id.
+        
+        notifs = session.query(Notification, User).outerjoin(User, Notification.sender_id == User.id)\
+            .filter(Notification.user_id == user.id).order_by(Notification.created_at.desc()).all()
+            
         out = []
-        for n in notifs:
+        for n, sender in notifs:
             out.append({
                 'id': n.id,
                 'title': n.title,
                 'body': n.message,
                 'read': n.is_read,
-                'timestamp': n.created_at.isoformat()
+                'timestamp': n.created_at.isoformat(),
+                'type': n.type,
+                'avatar': sender.avatar_url if sender else None,
+                'reference_id': n.reference_id
             })
         return jsonify(out), 200
     except Exception as e:
