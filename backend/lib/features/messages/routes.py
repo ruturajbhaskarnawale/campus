@@ -274,8 +274,21 @@ def list_threads(decoded_token=None):
                 "isGroup": c.type == 'group',
                 "otherUid": other_uid
             })
+
+        # Fetch Suggestions (People to chat with)
+        suggestions = []
+        if len(out) < 5: # If few chats, show suggestions
+            suggested_users = session.query(User).filter(User.id != user.id).order_by(func.random()).limit(10).all()
+            for u in suggested_users:
+                suggestions.append({
+                    "uid": u.uid,
+                    "name": u.full_name,
+                    "avatar": u.avatar_url,
+                    "bio": u.bio,
+                    "role": u.role
+                })
             
-        return jsonify({"threads": out}), 200
+        return jsonify({"threads": out, "suggestions": suggestions}), 200
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500

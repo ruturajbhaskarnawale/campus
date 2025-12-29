@@ -9,7 +9,7 @@ Enhanced Search Module with Advanced Features
 
 from flask import Blueprint, request, jsonify
 from lib.db.database import db_session
-from lib.db.models import User, Post, SearchHistory, PostLike
+from lib.db.models import User, Post, SearchHistory, PostLike, Follow
 from sqlalchemy import or_, desc, func
 import datetime
 
@@ -48,6 +48,11 @@ def unified_search():
             if search_type in ['all', 'users']:
                 # Random users or top XP users
                 users = session.query(User).order_by(func.random()).limit(limit).all()
+            
+            if search_type in ['all', 'projects', 'posts']:
+                # For empty query, return trending/recent posts/projects
+                posts = session.query(Post).order_by(Post.likes_count.desc()).limit(limit).all()
+                # We will process these in the common block below along with searched posts
         
         # Process Users (Common logic)
         if 'users' in locals() and users:
@@ -57,7 +62,7 @@ def unified_search():
             if requester_uid:
                 requester = session.query(User).filter(User.uid == requester_uid).first()
                 if requester:
-                     from lib.db.models import Follow
+                     # from lib.db.models import Follow (Already imported)
                      follows = session.query(Follow.followed_id).filter(Follow.follower_id == requester.id).all()
                      following_ids = {f[0] for f in follows}
 
@@ -74,28 +79,36 @@ def unified_search():
 
             # Search Posts/Projects
             if search_type in ['all', 'projects', 'posts']:
-                # Assuming Post has 'type' column? Check models.py
-                # Step 17 view didn't show 'type' explicitly in snippet, 
-                # but Project model exists? Or Post serves both?
-                # User provided code usually has Post acting as both or Project separately.
-                # Viewing models.py again (Step 17), there is `class Project(Base)`.
-                # So we search both Post and Project tables?
-                # Or maybe 'posts' table has a type?
-                # Let's search Post for now.
-                term = f'%{query}%'
-                posts = session.query(Post).filter(
-                    or_(Post.title.ilike(term), Post.content.ilike(term))
-                ).limit(limit).all()
+                if 'posts' not in locals():
+                    term = f'%{query}%'
+                    posts = session.query(Post).filter(
+                        or_(Post.title.ilike(term), Post.content_body.ilike(term))
+                    ).limit(limit).all()
                 
                 for p in posts:
                     item = {
                         'id': p.id,
                         'title': p.title,
-                        'description': p.content,
+                        'description': p.content_body,
                         'author_uid': p.author.uid if p.author else None,
-                        'type': 'post' # Stub
+                        'authorName': p.author.full_name if p.author else 'Unknown',
+                        'likes': p.likes_count,
+                        'type': p.type,
+                        'timestamp': p.created_at.isoformat()
                     }
-                    results['posts'].append(item)
+                    
+                    if p.type == 'project':
+                        # Enrich with project details if available
+                        if p.project:
+                            item.update({
+                                'status': p.project.status,
+                                'team_size': p.project.team_size_current,
+                                'max_team_size': p.project.team_size_max,
+                                'skills': p.project.skills_required_json
+                            })
+                        results['projects'].append(item)
+                    else:
+                        results['posts'].append(item)
 
         results['total'] = len(results['users']) + len(results['projects']) + len(results['posts'])
         return jsonify(results), 200

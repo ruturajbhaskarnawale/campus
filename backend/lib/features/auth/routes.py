@@ -136,7 +136,13 @@ def get_current_user(decoded_token=None):
             "name": user.full_name,
             "email": user.email,
             "avatar_url": user.avatar_url,
-            "role": user.role
+            "role": user.role,
+            "stats": {
+                "followers": user.followers_count,
+                "following": user.following_count,
+                "views": user.xp_points, # Using XP as views proxy for now
+                "posts": len(user.posts)
+            }
         }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -181,6 +187,7 @@ def profile(decoded_token=None):
                 'github_link': user.github_url,
                 'website_link': user.website_url,
                 'linkedin_link': user.linkedin_url,
+                'resume_url': user.resume_url,
                 'is_own_profile': (target_uid == current_user_uid)
             }
             return jsonify({"profile": profile_data}), 200
@@ -195,6 +202,7 @@ def profile(decoded_token=None):
         if 'github_link' in data: user.github_url = data['github_link']
         if 'linkedin_link' in data: user.linkedin_url = data['linkedin_link']
         if 'website_link' in data: user.website_url = data['website_link']
+        if 'resume_url' in data: user.resume_url = data['resume_url']
         
         if 'skills' in data:
             skill_names = data['skills']
@@ -226,3 +234,116 @@ def upload_avatar():
         "message": "Avatar uploaded (Mock)", 
         "avatar_url": f"https://i.pravatar.cc/300?u={random.randint(1,10000)}"
     }), 200
+
+@auth_bp.route('/users/<uid>/follow', methods=['POST'])
+@require_auth
+def follow_user(uid, decoded_token=None):
+    try:
+        session = db_session
+        current_uid = decoded_token.get('uid')
+        actor = session.query(User).filter(User.uid == current_uid).first()
+        target = session.query(User).filter(User.uid == uid).first()
+        
+        if not target: return jsonify({"error": "User not found"}), 404
+        if actor.id == target.id: return jsonify({"error": "Cannot follow self"}), 400
+        
+        from lib.db.models import Follow, Notification
+        import datetime
+        
+        # Check existing
+        existing = session.query(Follow).filter_by(follower_id=actor.id, followed_id=target.id).first()
+        following = False
+        
+        if existing:
+            session.delete(existing)
+            target.followers_count = max(0, (target.followers_count or 0) - 1)
+            actor.following_count = max(0, (actor.following_count or 0) - 1)
+            following = False
+        else:
+            new_follow = Follow(follower_id=actor.id, followed_id=target.id)
+            session.add(new_follow)
+            target.followers_count = (target.followers_count or 0) + 1
+            actor.following_count = (actor.following_count or 0) + 1
+            following = True
+            
+            # Notification
+            n = Notification(
+                recipient_id=target.id,
+                sender_id=actor.id,
+                type='follow',
+                title='New Follower',
+                body=f"{actor.full_name} started following you.",
+                reference_id=actor.id,
+                reference_type='user',
+                created_at=datetime.datetime.utcnow()
+            )
+            session.add(n)
+            
+        session.commit()
+        return jsonify({"message": "Success", "following": following}), 200
+    except Exception as e:
+        session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+@auth_bp.route('/change-password', methods=['POST'])
+@require_auth
+def change_password(decoded_token=None):
+    try:
+        data = request.json
+        old_password = data.get('oldPassword')
+        new_password = data.get('newPassword')
+        
+        if not old_password or not new_password:
+            return jsonify({"error": "Missing fields"}), 400
+            
+        session = db_session
+        uid = decoded_token.get('uid')
+        user = session.query(User).filter(User.uid == uid).first()
+        
+        if not user: return jsonify({"error": "User error"}), 404
+            
+        # Verify Old
+        stored_pw = user.password_hash
+        if isinstance(stored_pw, str): stored_pw = stored_pw.encode('utf-8')
+        
+        try:
+             import bcrypt
+             if not bcrypt.checkpw(old_password.encode('utf-8'), stored_pw):
+                 return jsonify({"error": "Incorrect old password"}), 401
+        except Exception as e:
+             return jsonify({"error": "Password verify error"}), 401
+            
+        # Update
+        import bcrypt
+        hashed = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        user.password_hash = hashed
+        session.commit()
+        
+        return jsonify({"message": "Password updated successfully"}), 200
+        
+    except Exception as e:
+        session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+@auth_bp.route('/settings/privacy', methods=['POST'])
+@require_auth
+def update_privacy(decoded_token=None):
+    try:
+        data = request.json
+        is_private = data.get('isPrivate')
+        
+        session = db_session
+        uid = decoded_token.get('uid')
+        user = session.query(User).filter(User.uid == uid).first()
+        
+        if not user: return jsonify({"error": "User not found"}), 404
+        
+        if is_private is not None:
+             user.is_private = bool(is_private)
+             
+        session.commit()
+        
+        return jsonify({"message": "Privacy settings updated", "is_private": user.is_private}), 200
+    except Exception as e:
+        session.rollback()
+        return jsonify({"error": str(e)}), 500

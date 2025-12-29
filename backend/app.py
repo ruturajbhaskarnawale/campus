@@ -39,6 +39,9 @@ app.register_blueprint(admin_bp, url_prefix='/api/admin')
 app.register_blueprint(search_bp, url_prefix='/api/search')
 app.register_blueprint(profile_bp, url_prefix='/api/profile')
 
+from lib.features.settings.routes import settings_bp
+app.register_blueprint(settings_bp, url_prefix='/api/settings')
+
 ## Simple rate-limiting middleware (very small, per-process)
 from flask import request
 from time import time

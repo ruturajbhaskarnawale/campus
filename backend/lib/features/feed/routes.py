@@ -141,7 +141,7 @@ def get_post(post_id):
         decoded, _ = verify_request_token(request)
         current_user_id = None
         is_liked = False
-        is_saved = False
+        is_following = False
         
         if decoded:
             u = session.query(User).filter(User.uid == decoded.get('uid')).first()
@@ -149,6 +149,10 @@ def get_post(post_id):
                 current_user_id = u.id
                 if session.query(PostLike).filter_by(user_id=u.id, post_id=p.id).first(): is_liked = True
                 if session.query(SavedPost).filter_by(user_id=u.id, post_id=p.id).first(): is_saved = True
+                
+                # Check Follow
+                from lib.db.models import Follow
+                if session.query(Follow).filter_by(follower_id=u.id, followed_id=p.author_id).first(): is_following = True
 
         d = {
             'id': p.id,
@@ -162,7 +166,8 @@ def get_post(post_id):
             'author_avatar': p.author.avatar_url,
             'media_urls': p.media_urls_json if p.media_urls_json else [],
             'is_liked': is_liked,
-            'is_saved': is_saved
+            'is_saved': is_saved,
+            'is_following': is_following
         }
         if p.project:
             d['skills_needed'] = p.project.skills_required_json
@@ -524,3 +529,45 @@ def vote_poll(post_id, decoded_token=None):
             
         return jsonify({"error": "Invalid option"}), 400
     except Exception as e: return jsonify({"error": str(e)}), 500
+
+@feed_bp.route('/user/<uid>/bookmarks', methods=['GET'])
+@require_auth
+def get_user_bookmarks(uid, decoded_token=None):
+    try:
+        session = db_session
+        user = session.query(User).filter(User.uid == uid).first()
+        if not user: return jsonify({"error": "User not found"}), 404
+        
+        saved_posts = session.query(SavedPost).filter(SavedPost.user_id == user.id).order_by(SavedPost.created_at.desc()).all()
+        
+        results = []
+        for sp in saved_posts:
+            # Optionally we can side-load the full post here or return post_id
+            # Frontend BookmarksScreen.js currently iterates and fetches individual posts!
+            # That's inefficient (N+1), but let's support it for now or optimize.
+            # "Each bookmark may contain post_id or full post" -> let's populate full post for efficiency
+            
+            p = sp.post # Relationship presumed Need to ensure SavedPost has 'post' relationship
+            if not p:
+                p = session.query(Post).filter(Post.id == sp.post_id).first()
+                
+            if p:
+                post_data = {
+                    'id': p.id,
+                    'title': p.title,
+                    'description': p.content_body,
+                    'type': p.type,
+                    'media_urls': p.media_urls_json if p.media_urls_json else [],
+                    'is_saved': True,
+                    'is_liked': False # skipped for list view optimization
+                }
+                results.append({
+                    'id': sp.id,
+                    'post_id': p.id,
+                    'post': post_data,
+                    'created_at': sp.created_at.isoformat()
+                })
+        
+        return success_response(results, status=200)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

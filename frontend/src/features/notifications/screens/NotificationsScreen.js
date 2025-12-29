@@ -268,7 +268,7 @@ export default function NotificationsScreen({ navigation }) {
         {/* List */}
         <SectionList
           sections={sections}
-          keyExtractor={(item, index) => item.id + index}
+          keyExtractor={(item, index) => `${item.id}-${index}`}
           refreshControl={<RefreshControl refreshing={loading} onRefresh={() => fetchNotifications(uid)} />}
           renderItem={({ item }) => <NotificationCard item={item} />}
           renderSectionHeader={renderSectionHeader}

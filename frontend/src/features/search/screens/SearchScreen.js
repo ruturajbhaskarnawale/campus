@@ -82,6 +82,48 @@ export default function SearchScreen({ navigation }) {
     }
   };
 
+  // --- Helper Functions ---
+  const loadRecentSearches = async () => {
+    try {
+      const saved = await AsyncStorage.getItem('recent_searches');
+      if (saved) setRecentSearches(JSON.parse(saved));
+    } catch (error) {
+      console.log('Error loading recents', error);
+    }
+  };
+
+  const saveToRecentSearches = async (query) => {
+    if (!query) return;
+    try {
+        const unique = [query, ...recentSearches.filter(q => q !== query)].slice(0, 10);
+        setRecentSearches(unique);
+        await AsyncStorage.setItem('recent_searches', JSON.stringify(unique));
+    } catch (e) {
+        console.log("Error saving recent", e);
+    }
+  };
+
+  const clearRecentSearches = async () => {
+      setRecentSearches([]);
+      await AsyncStorage.removeItem('recent_searches');
+  };
+
+  const loadTrendingSearches = async () => {
+      // Mock or API
+      setTrending([
+          { query: 'React Native', count: 120 },
+          { query: 'Python', count: 98 },
+          { query: 'UI/UX Design', count: 85 }
+      ]);
+  };
+
+  const fetchSuggestions = async (text) => {
+      // Mock suggestions for now
+      if (!text) return;
+      const fake = ['React', 'React Native', 'Redux', 'Ruby', 'Rust'].filter(i => i.toLowerCase().includes(text.toLowerCase()));
+      setSuggestions(fake);
+  };
+
   // Real-time Search with Debouncing
   const handleSearchInput = (text) => {
     setSearchQuery(text);
@@ -604,28 +646,14 @@ export default function SearchScreen({ navigation }) {
     );
   };
 
-  // Empty State
-  const renderEmptyState = () => {
-    if (loading) return null;
-
-    if (!searchQuery) {
-      return (
-        <ScrollView
-          style={styles.emptyContainer}
-          contentContainerStyle={styles.emptyContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <LinearGradient
-            colors={[colors.primary + '20', colors.secondary + '20']}
-            style={styles.emptyIconContainer}
-          >
-            <Ionicons name="search" size={48} color={colors.primary} />
-          </LinearGradient>
-          <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>Discover Amazing Projects</Text>
-          <Text style={[styles.emptyText, { color: colors.text.secondary }]}>Search for users, projects, and collaborate!</Text>
-
-          {/* Recent Searches */}
-          {recentSearches.length > 0 && (
+  // Render Search Dashboard (Header)
+  const renderHeader = () => {
+     if (searchQuery) return null; // Only show on dashboard
+     
+     return (
+        <View>
+           {/* Recent Searches */}
+           {recentSearches.length > 0 && (
             <View style={styles.recentSection}>
               <View style={styles.recentHeader}>
                 <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>Recent Searches</Text>
@@ -684,26 +712,12 @@ export default function SearchScreen({ navigation }) {
               ))}
             </View>
           )}
-        </ScrollView>
-      );
-    }
-
-    if (results.total === 0) {
-      return (
-        <View style={styles.emptyContainer}>
-          <LinearGradient
-            colors={[colors.text.tertiary + '20', colors.text.tertiary + '10']}
-            style={styles.emptyIconContainer}
-          >
-            <Ionicons name="search-outline" size={48} color={colors.text.tertiary} />
-          </LinearGradient>
-          <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>No Results Found</Text>
-          <Text style={[styles.emptyText, { color: colors.text.secondary }]}>Try different keywords or adjust your filters</Text>
+          
+          <View style={{paddingHorizontal: 20, paddingTop: 20, paddingBottom: 10}}>
+             <Text style={{fontSize: 20, fontWeight: 'bold', color: colors.text.primary}}>Suggested for you</Text>
+          </View>
         </View>
-      );
-    }
-
-    return null;
+     );
   };
 
   // Main Results
@@ -725,12 +739,27 @@ export default function SearchScreen({ navigation }) {
           ? results.projects
           : results.posts;
 
-    if (dataToShow.length === 0) return renderEmptyState();
+    // True Empty State (No Dashboard + No Results)
+    if (dataToShow.length === 0 && searchQuery) {
+        return (
+            <View style={styles.emptyContainer}>
+              <LinearGradient
+                colors={[colors.text.tertiary + '20', colors.text.tertiary + '10']}
+                style={styles.emptyIconContainer}
+              >
+                <Ionicons name="search-outline" size={48} color={colors.text.tertiary} />
+              </LinearGradient>
+              <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>No Results Found</Text>
+              <Text style={[styles.emptyText, { color: colors.text.secondary }]}>Try different keywords or adjust your filters</Text>
+            </View>
+        );
+    }
 
     return (
       <FlatList
+        ListHeaderComponent={renderHeader}
         data={dataToShow}
-        keyExtractor={(item, index) => item.uid || item.id || index.toString()}
+        keyExtractor={(item, index) => item.uid ? `u-${item.uid}` : (item.id ? `p-${item.id}` : `idx-${index}`)}
         renderItem={({ item, index }) => {
           if (item.uid) return renderUserCard({ item, index });
           return renderProjectCard({ item, index });

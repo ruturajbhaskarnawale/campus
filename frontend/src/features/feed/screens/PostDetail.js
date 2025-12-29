@@ -90,10 +90,16 @@ const SmartText = ({ content, onCopy, colors }) => {
 // --- Main Component ---
 export default function PostDetail({ route, navigation }) {
     const { colors, isDark } = useTheme();
-    const { postId } = route.params || {};
-    const [post, setPost] = useState(null);
+    
+    // Normalize Parameters: Handle both direct postId and passed object
+    const params = route.params || {};
+    const passedPost = params.post;
+    const postId = params.postId || (passedPost ? (passedPost.id || passedPost.post_id) : null);
+    
+    // If we have a full post object passed, we can init state immediately (Optimistic Render)
+    const [post, setPost] = useState(passedPost || null);
     const [comments, setComments] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(!passedPost); // If we have post, not loading initially
     const [uid, setUid] = useState(null);
     const [refreshing, setRefreshing] = useState(false);
     
@@ -104,6 +110,7 @@ export default function PostDetail({ route, navigation }) {
     const [replyTo, setReplyTo] = useState(null); // parentId
     const [lightboxVisible, setLightboxVisible] = useState(false);
     const [isBookmarked, setIsBookmarked] = useState(false);
+    const [isFollowing, setIsFollowing] = useState(false);
     const insets = useSafeAreaInsets();
     
     // Fetch Data
@@ -112,15 +119,23 @@ export default function PostDetail({ route, navigation }) {
             const currentUid = await getCurrentUserId();
             setUid(currentUid);
             
+            
             // 1. Get Post with side-loaded data
-            const res = await client.get(`/feed/${postId}`);
-            setPost(res.data.data || res.data);
+            if (postId) {
+                const res = await client.get(`/feed/${postId}`);
+                const postData = res.data.data || res.data;
+                setPost(postData);
+
+                // 3. Set Status from Backend
+                setIsBookmarked(postData.is_saved); 
+                setIsFollowing(postData.is_following);
+            } else {
+                 Alert.alert("Error", "No Post ID provided");
+                 navigation.goBack();
+            }
             
             // 2. Get Comments
             fetchComments();
-            
-            // 3. Check Bookmark Status (Mock or implement if endpoint exists)
-            // setIsBookmarked(res.data.isBookmarked); 
             
         } catch (e) {
             Alert.alert("Error", "Could not load post");
@@ -185,16 +200,31 @@ export default function PostDetail({ route, navigation }) {
     };
     
     const toggleBookmark = async () => {
+        const prev = isBookmarked;
         setIsBookmarked(!isBookmarked); // Optimistic Update
         try {
             await client.post(`/feed/${postId}/save`, { uid });
         } catch (e) {
-            setIsBookmarked(!isBookmarked); // Revert
+            setIsBookmarked(prev); // Revert
+        }
+    };
+    
+    const handleFollow = async () => {
+        if (!post) return;
+        const prev = isFollowing;
+        setIsFollowing(!isFollowing); // Optimistic
+        
+        try {
+            // Call Backend
+            await client.post(`/auth/users/${post.author_uid}/follow`);
+        } catch (e) {
+             setIsFollowing(prev);
+             Alert.alert("Error", "Could not update follow status");
         }
     };
     
     const handleConnect = () => {
-        Alert.alert("Request Sent", `Connection request sent to ${post.author_name}`);
+       handleFollow();
     };
 
     // Parallax & Progress Animations
@@ -304,11 +334,13 @@ export default function PostDetail({ route, navigation }) {
                            <Text style={styles.headerTitle}>{post.title}</Text>
                            <View style={styles.headerMeta}>
                                <View style={styles.authorRow}>
-                                   <Image source={{ uri: post.author_avatar || 'https://picsum.photos/40/40' }} style={styles.smallAvatar} />
-                                   <Text style={styles.headerAuthor}>{post.author_name}</Text>
-                                   {/* 19. One-tap connect */}
-                                   <TouchableOpacity onPress={handleConnect} style={styles.connectBtn}>
-                                       <Text style={styles.connectText}>+ Connect</Text>
+                                   <TouchableOpacity style={{flexDirection:'row', alignItems:'center'}} onPress={() => navigation.navigate('Profile', { screen: 'ProfileDetail', params: { userId: post.author_uid }})}>
+                                       <Image source={{ uri: post.author_avatar || 'https://picsum.photos/40/40' }} style={styles.smallAvatar} />
+                                       <Text style={[styles.headerAuthor, {marginLeft: 8, marginRight: 8}]}>{post.author_name}</Text>
+                                   </TouchableOpacity>
+                                   
+                                   <TouchableOpacity onPress={handleConnect} style={[styles.connectBtn, isFollowing && {backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)'}]}>
+                                       <Text style={styles.connectText}>{isFollowing ? "Following" : "+ Follow"}</Text>
                                    </TouchableOpacity>
                                </View>
                            </View>

@@ -27,6 +27,12 @@ export default function ChatScreen({ route, navigation }) {
     }
   }, [threadId]);
 
+  useEffect(() => {
+    if (route.params?.initialMessage) {
+        setInput(route.params.initialMessage);
+    }
+  }, [route.params?.initialMessage]);
+
   const loadUser = async () => {
     const u = await getCurrentUserId();
     setUid(u);

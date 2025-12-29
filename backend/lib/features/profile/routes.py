@@ -123,6 +123,10 @@ def get_profile(user_id):
             'role': user.role,
             'followers_count': user.followers_count,
             'following_count': user.following_count,
+            'cover_photo': user.cover_photo_url,
+            'github_url': user.github_url,
+            'linkedin_url': user.linkedin_url,
+            'website_url': user.website_url,
             'xp_points': user.xp_points
         }), 200
     except Exception as e:

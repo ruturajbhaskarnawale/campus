@@ -18,7 +18,7 @@ export default function BookmarksScreen({ navigation }) {
     try {
       if (!uid) return;
       const res = await client.get(`/feed/user/${uid}/bookmarks`);
-      const list = res.data || [];
+      const list = res.data.data || [];
       // Each bookmark may contain post_id or full post
       const posts = await Promise.all(list.map(async (b) => {
         if (b.post_id) {

@@ -15,7 +15,7 @@ import { useToast } from '../../../core/providers/ToastProvider';
 const CATEGORIES = ["All", "AI/ML", "Web Dev", "Mobile", "Blockchain", "Design", "Data"];
 
 export default function FeedScreen({ navigation }) {
-    const { colors, isDark } = useTheme(); 
+    const { colors, isDark, toggleTheme } = useTheme(); 
     const [posts, setPosts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
@@ -164,6 +164,22 @@ export default function FeedScreen({ navigation }) {
                     })
                 }
             ]}>
+                {/* Top Navigation Row */}
+                <View style={[styles.topNav, isDesktop && { maxWidth: 600, alignSelf: 'center', width: '100%' }]}>
+                     <TouchableOpacity onPress={() => navigation.navigate('Create')}>
+                         <Ionicons name="create-outline" size={26} color={colors.text.primary} />
+                     </TouchableOpacity>
+                     
+                     <View style={{flexDirection: 'row'}}>
+                         <TouchableOpacity onPress={toggleTheme} style={{marginRight: 16}}>
+                             <Ionicons name={isDark ? "sunny-outline" : "moon-outline"} size={26} color={colors.text.primary} />
+                         </TouchableOpacity>
+                         <TouchableOpacity onPress={() => navigation.navigate('Notifications')}>
+                             <Ionicons name="notifications-outline" size={26} color={colors.text.primary} />
+                         </TouchableOpacity>
+                     </View>
+                </View>
+
                 <View style={[styles.searchBar, { backgroundColor: colors.background.tertiary }, isDesktop && { maxWidth: 600, alignSelf: 'center', width: '100%' }]}>
                     <Ionicons name="search-outline" size={20} color={colors.text.tertiary} />
                     <TextInput 
@@ -312,6 +328,13 @@ const styles = StyleSheet.create({
     mobileHeaderFixed: {
         position: 'absolute',
         top: 0, left: 0, right: 0
+    },
+    topNav: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: SPACING.m,
+        paddingBottom: SPACING.s,
     },
     
     searchBar: { flexDirection: 'row', alignItems: 'center', margin: SPACING.m, paddingHorizontal: SPACING.m, borderRadius: RADIUS.m, height: 44 },

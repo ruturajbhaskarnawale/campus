@@ -1,11 +1,10 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { COLORS, SPACING, RADIUS, SHADOWS, FONTS } from '../../../core/design/Theme';
 import { signOut } from '../../../core/auth';
-import client from '../../../core/api/client';
 
 const SettingsItem = ({ label, icon, onPress, value, type = 'link', onToggle, isDestructive }) => (
   <TouchableOpacity 

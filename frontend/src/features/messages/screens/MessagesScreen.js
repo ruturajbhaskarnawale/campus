@@ -22,6 +22,7 @@ import { COLORS, SPACING, FONTS, RADIUS, SHADOWS } from '../../../core/design/Th
 
 export default function MessagesScreen({ navigation }) {
   const [threads, setThreads] = useState([]);
+  const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -67,6 +68,7 @@ export default function MessagesScreen({ navigation }) {
       
       const threadsData = response.data.threads || [];
       setThreads(threadsData);
+      setSuggestions(response.data.suggestions || []);
     } catch (error) {
       console.error('Load threads error:', error);
       Alert.alert('Error', 'Unable to load messages');
@@ -81,32 +83,20 @@ export default function MessagesScreen({ navigation }) {
     loadThreads(currentUserId);
   }, [currentUserId]);
 
+  // ... (Keep existing formatTimestamp and getFilteredThreads)
+
   const formatTimestamp = (timestamp) => {
     if (!timestamp) return '';
-    
     try {
       const date = new Date(timestamp);
       const now = new Date();
-      const diff = now - date;
-      
-      const minutes = Math.floor(diff / 60000);
-      const hours = Math.floor(diff / 3600000);
-      const days = Math.floor(diff / 86400000);
-      
-      if (minutes < 1) return 'Just now';
-      if (minutes < 60) return `${minutes}m ago`;
-      if (hours < 24) return `${hours}h ago`;
-      if (days < 7) return `${days}d ago`;
-      
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    } catch {
-      return '';
-    }
+      if ((now - date) < 60000) return 'Just now';
+      return date.toLocaleDateString();
+    } catch { return ''; }
   };
 
   const getFilteredThreads = () => {
     if (!searchQuery) return threads;
-    
     const query = searchQuery.toLowerCase();
     return threads.filter(thread => 
       thread.name.toLowerCase().includes(query) ||
@@ -169,6 +159,60 @@ export default function MessagesScreen({ navigation }) {
     );
   };
 
+  const renderSuggestions = () => {
+      if (!suggestions || suggestions.length === 0) {
+          // Fallback to basic empty state if no suggestions
+         return (
+             <View style={styles.emptyContainer}>
+                <Ionicons name="chatbubbles-outline" size={64} color="#ddd" />
+                <Text style={[styles.emptyTitle, {marginTop: 20, color: '#444'}]}>No messages yet</Text>
+                <Text style={{color: '#888', marginTop: 8}}>Start connecting with other students!</Text>
+                <TouchableOpacity 
+                   style={{marginTop: 20, backgroundColor: COLORS.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 20}}
+                   onPress={() => navigation.navigate('Search')}
+                >
+                    <Text style={{color: '#fff', fontWeight: '600'}}>Find People</Text>
+                </TouchableOpacity>
+             </View>
+         );
+      }
+
+      return (
+         <ScrollView style={{flex: 1, padding: 16}}>
+             <View style={{alignItems: 'center', marginBottom: 20, marginTop: 20}}>
+                <Text style={{fontSize: 22, fontWeight: 'bold', color: '#262626'}}>Suggested for you</Text>
+                <Text style={{color: '#888'}}>Start a conversation with these people</Text>
+             </View>
+             
+             {suggestions.map((u, i) => (
+                <TouchableOpacity 
+                   key={i} 
+                   style={[styles.threadItem, {backgroundColor: '#f9f9f9', borderRadius: 12, marginBottom: 10}]} 
+                   onPress={() => {
+                       // Navigate to Chat with this user
+                       // We need to pass params that ChatScreen expects
+                       navigation.navigate('Chat', { 
+                           userId: u.uid, 
+                           name: u.name, 
+                           avatar: u.avatar 
+                       });
+                   }}
+                >
+                   <Image source={{uri: u.avatar}} style={styles.avatar} />
+                   <View style={{marginLeft: 12, flex: 1}}>
+                      <Text style={{fontSize: 16, fontWeight: '600', color: '#262626'}}>{u.name}</Text>
+                      <Text style={{color: '#666', fontSize: 13}}>{u.role || 'Student'}</Text>
+                      <Text style={{color: '#888', fontSize: 12}} numberOfLines={1}>{u.bio}</Text>
+                   </View>
+                   <View style={{backgroundColor: COLORS.primary + '15', padding: 8, borderRadius: 20}}>
+                      <Ionicons name="chatbubble-ellipses" size={20} color={COLORS.primary} />
+                   </View>
+                </TouchableOpacity>
+             ))}
+         </ScrollView>
+      )
+  };
+
   const renderThreadCard = ({ item }) => {
     const isUnread = item.unreadCount > 0;
     
@@ -223,7 +267,7 @@ export default function MessagesScreen({ navigation }) {
       {renderHeader()}
       
       {threads.length === 0 && !loading ? (
-        renderEmptyState()
+        renderSuggestions()
       ) : (
         <FlatList
           data={threads}

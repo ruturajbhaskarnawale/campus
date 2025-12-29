@@ -305,3 +305,6 @@ class SavedPost(Base):
     post_id = Column(Integer, ForeignKey('posts.id'))
     note = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User")
+    post = relationship("Post")

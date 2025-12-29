@@ -55,12 +55,12 @@ export default function ProfileSummary() {
                 
                 <View style={styles.statsRow}>
                     <View style={styles.statItem}>
-                        <Text style={styles.statValue}>120</Text>
+                        <Text style={styles.statValue}>{user.stats?.views || 0}</Text>
                         <Text style={styles.statLabel}>Views</Text>
                     </View>
                     <View style={styles.divider} />
                     <View style={styles.statItem}>
-                        <Text style={styles.statValue}>45</Text>
+                        <Text style={styles.statValue}>{user.stats?.followers || 0}</Text>
                         <Text style={styles.statLabel}>Connections</Text>
                     </View>
                 </View>
@@ -74,7 +74,7 @@ export default function ProfileSummary() {
                     <Text style={styles.suggestionText}>Add your GitHub to rank higher!</Text>
                 </View>
                 
-                <TouchableOpacity style={styles.myItemsBtn} onPress={() => navigation.navigate('SavedItems')}>
+                <TouchableOpacity style={styles.myItemsBtn} onPress={() => navigation.navigate('Profile', { screen: 'Bookmarks' })}>
                      <Ionicons name="bookmark" size={16} color={COLORS.text.primary} />
                      <Text style={styles.myItemsText}>My Items</Text>
                 </TouchableOpacity>

@@ -162,11 +162,31 @@ export default function ProjectCard({ project, onJoin, navigation }) {
 
   const handleJoin = async () => {
        try {
-           await client.post(`/feed/${project.id}/join`, { uid: await getCurrentUserId() });
-           Alert.alert("Success", "Request sent to project author!");
-           if (onJoin) onJoin();
+           // 1. Get Conversation ID
+           const res = await client.post('/messages/init', { 
+               target_uids: [project.author_uid], 
+               type: 'direct' 
+           });
+           const threadId = res.data.conversation_id;
+           
+           // 2. Navigate to Chat
+           // Navigate to 'Messages' tab then 'Chat' screen
+           // We use the root navigation if possible, or assume 'Messages' is a sibling in Tab
+           // If we are in FeedStack, we need to go back to Tab -> Messages
+            navigation.navigate('Messages', {
+               screen: 'Chat',
+               params: {
+                   threadId,
+                   name: project.author_name,
+                   avatar: project.author_avatar,
+                   otherUid: project.author_uid,
+                   initialMessage: `Hi, I'm interested in joining your project: ${project.title}`
+               }
+           });
+
        } catch (e) {
-           Alert.alert("Error", "Failed to send request. " + (e.response?.data?.error || e.message));
+           console.error(e);
+           Alert.alert("Error", "Failed to start chat.");
        }
   };
 
@@ -239,7 +259,7 @@ export default function ProjectCard({ project, onJoin, navigation }) {
         
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation && navigation.navigate('Profile', { uid: project.author_uid })}>
+          <TouchableOpacity onPress={() => navigation && navigation.navigate('Profile', { screen: 'ProfileDetail', params: { userId: project.author_uid }})}>
             <View style={styles.avatarPlaceholder}>
                 {project.author_avatar ? (
                      <Animated.Image source={{uri: project.author_avatar}} style={{width:40,height:40,borderRadius:20}} />
@@ -249,10 +269,12 @@ export default function ProjectCard({ project, onJoin, navigation }) {
             </View>
           </TouchableOpacity>
           <View style={{ flex: 1, marginLeft: project.author_avatar ? 0 : 0 }}>
-            <Text style={styles.author}>{project.author_name || 'Anonymous'}</Text>
+            <TouchableOpacity onPress={() => navigation && navigation.navigate('Profile', { screen: 'ProfileDetail', params: { userId: project.author_uid }})}>
+                <Text style={styles.author}>{project.author_name || 'Anonymous'}</Text>
+            </TouchableOpacity>
             <Text style={styles.timestamp}>{timeAgo(project.timestamp)}</Text>
           </View>
-          <TouchableOpacity onPress={() => navigation && navigation.navigate('Profile', { userId: project.author_uid })}>
+          <TouchableOpacity onPress={() => navigation && navigation.navigate('Profile', { screen: 'ProfileDetail', params: { userId: project.author_uid }})}>
              <Ionicons name="ellipsis-horizontal" size={20} color={COLORS.text.secondary} />
           </TouchableOpacity>
         </View>
