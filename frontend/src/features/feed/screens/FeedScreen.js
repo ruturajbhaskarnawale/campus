@@ -169,6 +169,10 @@ export default function FeedScreen({ navigation }) {
                      <TouchableOpacity onPress={() => navigation.navigate('Create')}>
                          <Ionicons name="create-outline" size={26} color={colors.text.primary} />
                      </TouchableOpacity>
+
+                     <View style={{ position: 'absolute', left: 0, right: 0, alignItems: 'center', pointerEvents: 'none' }}>
+                        <Text style={{ fontFamily: FONTS.header, fontSize: 20, color: colors.primary, fontWeight: 'bold' }}>Campus Hub</Text>
+                     </View>
                      
                      <View style={{flexDirection: 'row'}}>
                          <TouchableOpacity onPress={toggleTheme} style={{marginRight: 16}}>

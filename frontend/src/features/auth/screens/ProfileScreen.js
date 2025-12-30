@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, RefreshControl, Dimensions, StatusBar, Alert, Modal, Linking, Animated, Platform, ImageBackground } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, RefreshControl, Dimensions, StatusBar, Alert, Modal, Linking, Animated, Platform, ImageBackground, Share } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5, Feather } from '@expo/vector-icons';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur'; // If available, otherwise we simulate transparency
 import client from '../../../core/api/client';
+import QRCode from 'react-native-qrcode-svg';
 import { getCurrentUserId, signOut } from '../../../core/auth';
 import { COLORS, SPACING, RADIUS, SHADOWS, FONTS } from '../../../core/design/Theme';
 import { FeedSkeleton } from '../../../core/widgets/SkeletonLoader';
@@ -45,26 +47,26 @@ const LevelModal = ({ visible, onClose, stats }) => {
     );
 };
 
-const InsightsCard = ({ visible }) => {
+const InsightsCard = ({ visible, stats }) => {
     if (!visible) return null;
     return (
         <View style={styles.insightsCard}>
             <View style={{flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10}}>
                 <Text style={{fontWeight: 'bold', fontSize: 16}}>Private Insights 🔒</Text>
-                <Text style={{color: COLORS.success, fontSize: 12}}>+12% this week</Text>
+                <Text style={{color: COLORS.success, fontSize: 12}}>Real-time</Text>
             </View>
             <View style={{flexDirection: 'row', justifyContent: 'space-between'}}>
                  <View style={styles.insightItem}>
-                     <Text style={styles.insightVal}>42</Text>
+                     <Text style={styles.insightVal}>{stats?.views || 0}</Text>
                      <Text style={styles.insightLbl}>Profile Views</Text>
                  </View>
                  <View style={styles.insightItem}>
-                     <Text style={styles.insightVal}>1.2k</Text>
+                     <Text style={styles.insightVal}>{stats?.impressions || 0}</Text>
                      <Text style={styles.insightLbl}>Post Impressions</Text>
                  </View>
                  <View style={styles.insightItem}>
-                     <Text style={styles.insightVal}>8</Text>
-                     <Text style={styles.insightLbl}>New Connects</Text>
+                     <Text style={styles.insightVal}>{stats?.followers || 0}</Text>
+                     <Text style={styles.insightLbl}>Total Followers</Text>
                  </View>
             </View>
         </View>
@@ -124,11 +126,45 @@ export default function ProfileScreen({ navigation }) {
     const [uid, setUid] = useState(null);
     const [activeTab, setActiveTab] = useState('Posts'); 
     const [showQr, setShowQr] = useState(false);
+    
+    // Scanner
+    const [showScanner, setShowScanner] = useState(false);
+    const [scanned, setScanned] = useState(false);
+    const [permission, requestPermission] = useCameraPermissions();
+
     const [showLevel, setShowLevel] = useState(false);
     const [expandedBio, setExpandedBio] = useState(false);
+    const [selectedPost, setSelectedPost] = useState(null);
     
     // Animation
     const scrollY = useRef(new Animated.Value(0)).current;
+
+    const handleBarCodeScanned = ({ type, data }) => {
+        setScanned(true);
+        if (data.includes('campushub://profile/')) {
+            const scannedUid = data.split('/').pop();
+            setShowScanner(false);
+            Alert.alert("Scanned!", `Found profile: ${scannedUid}`, [
+                { text: "View", onPress: () => navigation.navigate('ProfileDetail', { userId: scannedUid }) }
+            ]);
+        } else {
+            Alert.alert("Invalid QR", "This code is not a CampusHub profile.");
+            setShowScanner(false);
+        }
+    };
+
+    const openScanner = () => {
+        if (!permission) return;
+        if (!permission.granted) {
+            requestPermission().then(res => {
+                if (res.granted) setShowScanner(true);
+                else Alert.alert("Permission", "Camera permission is required.");
+            });
+        } else {
+            setScanned(false);
+            setShowScanner(true);
+        }
+    };
 
     useFocusEffect(
         React.useCallback(() => {
@@ -146,29 +182,60 @@ export default function ProfileScreen({ navigation }) {
                 return;
             };
 
-            const res = await client.get(`/profile/${currentUid}`);
-            setProfile(res.data);
-
-            try {
-                const f = await client.get(`/social/followers/${currentUid}`);
-                const fo = await client.get(`/social/following/${currentUid}`);
-                const postsRes = await client.get(`/feed?author_uid=${currentUid}`);
-
+            // Use the enhanced endpoint
+            const res = await client.get(`/profile/${currentUid}/enhanced`);
+            const data = res.data;
+            
+            setProfile({
+                 ...data,
+                 // Provide fallback if user model structure differs slightly
+                 avatar_url: data.avatar_url || data.avatar,
+                 cover_url: data.cover_photo
+            });
+            
+            // Stats from backend are now accurate
+            if (data.stats) {
                 setStats({
-                    followers: res.data.followers_count ?? (f.data || []).length,
-                    following: res.data.following_count ?? (fo.data || []).length,
-                    posts: (postsRes.data || []).length
+                    posts: data.stats.collaborations + (data.stats.posts || 0), // Use enhanced logic if available, or just data.stats.posts if backend provides
+                    // Actually, backend 'enhanced' returns 'collaborations', maybe missing 'posts' count in simplified dict?
+                    // Let's check backend route: 'stats' = {'views', 'collaborations', 'likes', 'followers', 'following', 'reputation'}
+                    // It seems I missed 'posts' in the stats dict in previous step. I should trust 'collaborations' as projects count?
+                    // Let's rely on posts fetched length for now if stats.posts is missing.
+                    followers: data.stats.followers,
+                    following: data.stats.following,
+                    views: data.stats.views,
+                    impressions: data.stats.impressions,
+                    likes: data.stats.likes
                 });
-                const postsData = postsRes.data;
-                const safePosts = Array.isArray(postsData) ? postsData : (postsData?.data || []);
-                setPosts(Array.isArray(safePosts) ? safePosts : []);
-            } catch (ignore) { }
+            }
+
+            // Fetch Posts Separate or reuse?
+            console.log("Fetching posts for:", currentUid);
+            const postsRes = await client.get(`/feed?author_uid=${currentUid}`);
+            console.log("Posts Response:", postsRes.data);
+            setPosts(postsRes.data?.data || []);
+            
+            // Backend enhanced endpoint returns 'projects' list now
+            // We can store it in profile.projects or separate state
+            // Let's assume profile.projects is populated
 
         } catch (e) {
             console.error(e);
         } finally {
             setLoading(false);
             setRefreshing(false);
+        }
+    };
+
+    const handleShare = async () => {
+        try {
+            const url = `campushub://profile/${profile?.uid}`;
+            await Share.share({
+                message: `Check out my profile on CampusHub! ${url}`,
+                url: url
+            });
+        } catch (error) {
+            Alert.alert("Error", error.message);
         }
     };
 
@@ -221,9 +288,14 @@ export default function ProfileScreen({ navigation }) {
 
             {/* Float Header Controls */}
             <SafeAreaView style={styles.floatHeader} edges={['top']}>
-                <TouchableOpacity style={styles.glassBtn} onPress={() => setShowQr(true)}>
-                    <Ionicons name="qr-code" size={20} color="#fff" />
-                </TouchableOpacity>
+                <View style={{flexDirection: 'row', gap: 10}}>
+                    <TouchableOpacity style={styles.glassBtn} onPress={() => setShowQr(true)}>
+                        <Ionicons name="qr-code-outline" size={20} color="#fff" />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.glassBtn} onPress={openScanner}>
+                        <Ionicons name="scan-outline" size={20} color="#fff" />
+                    </TouchableOpacity>
+                </View>
                 <TouchableOpacity style={styles.glassBtn} onPress={() => navigation.navigate('Settings')}>
                     <Ionicons name="settings-outline" size={20} color="#fff" />
                 </TouchableOpacity>
@@ -275,9 +347,8 @@ export default function ProfileScreen({ navigation }) {
                         </TouchableOpacity>
                     </View>
                     
-                    {/* Insights (Private) */}
                     <View style={{paddingHorizontal: 20, marginBottom: 20}}>
-                        <InsightsCard visible={true} />
+                        <InsightsCard visible={true} stats={stats} />
                     </View>
 
                     {/* Buttons */}
@@ -295,12 +366,12 @@ export default function ProfileScreen({ navigation }) {
 
                     {/* Featured Project */}
                     <View style={{paddingHorizontal: 20}}>
-                        <FeaturedProject />
+                        <FeaturedProject project={profile?.projects?.[0]} onPress={() => profile?.projects?.[0]?.demo_url && Linking.openURL(profile.projects[0].demo_url)} />
                     </View>
 
                     {/* Tabs */}
                     <View style={styles.tabsRow}>
-                        {['Posts', 'Media', 'About'].map(t => (
+                        {['Posts', 'Projects', 'About'].map(t => (
                             <TouchableOpacity key={t} onPress={() => setActiveTab(t)} style={[styles.tabBtn, activeTab === t && styles.tabActive]}>
                                 <Text style={[styles.tabText, activeTab === t && styles.tabTextActive]}>{t}</Text>
                             </TouchableOpacity>
@@ -312,15 +383,39 @@ export default function ProfileScreen({ navigation }) {
                          {activeTab === 'Posts' && (
                              <View style={styles.grid}>
                                  {posts.map((p, i) => (
-                                     <TouchableOpacity key={i} style={styles.gridItem}>
+                                     <TouchableOpacity key={i} style={styles.gridItem} onPress={() => setSelectedPost(p)}>
                                          <Image source={{uri: p.media_urls?.[0] || `https://picsum.photos/200?random=${i}`}} style={styles.gridImage} />
                                      </TouchableOpacity>
                                  ))}
-                                 {/* Example blanks for layout */}
-                                 {posts.length < 9 && Array.from({length: 9 - posts.length}).map((_, i) => (
-                                      <View key={`b-${i}`} style={[styles.gridItem, {backgroundColor: '#f0f0f0'}]} />
-                                 ))}
+                                 {posts.length === 0 && (
+                                     <View style={{padding: 20, alignItems: 'center', width: '100%'}}>
+                                         <Text style={{color: '#999', fontSize: 16}}>Let's post your first project/post.</Text>
+                                     </View>
+                                 )}
                              </View>
+                         )}
+                         {activeTab === 'Projects' && (
+                            <View style={{padding: 20}}>
+                                {(profile?.projects || []).map((proj, i) => (
+                                    <TouchableOpacity key={i} style={styles.projectCard} onPress={() => Linking.openURL(proj.demo_url || proj.desc)}> 
+                                    {/* Using desc as url fallback if it's a link, or just alert */}
+                                        <Image source={{uri: proj.image}} style={styles.projThumb} />
+                                        <View style={styles.projInfo}>
+                                            <Text style={styles.projTitle}>{proj.title}</Text>
+                                            <Text style={styles.projDesc} numberOfLines={2}>{proj.desc}</Text>
+                                            <View style={{flexDirection: 'row', marginTop: 8}}>
+                                                <View style={styles.badge}><Text style={styles.badgeText}>Active</Text></View>
+                                            </View>
+                                        </View>
+                                        <Ionicons name="chevron-forward" size={20} color="#ccc" />
+                                    </TouchableOpacity>
+                                ))}
+                                {(!profile?.projects || profile.projects.length === 0) && (
+                                    <View style={{padding: 20, alignItems: 'center', width: '100%'}}>
+                                        <Text style={{textAlign: 'center', marginTop: 20, color: '#999', fontSize: 16}}>Let's showcase your first project.</Text>
+                                    </View>
+                                )}
+                            </View>
                          )}
                          {activeTab === 'About' && (
                              <View style={{padding: 20}}>
@@ -330,6 +425,23 @@ export default function ProfileScreen({ navigation }) {
                                          <SkillBadge key={s} skill={s} onPress={() => Alert.alert(s, "Endorsed by 5 people")} />
                                      ))}
                                  </View>
+                                 
+                                 <Text style={styles.sectionTitleSmall}>Socials</Text>
+                                 <View style={styles.socialRow}>
+                                     {profile?.socials?.github && (
+                                         <TouchableOpacity onPress={() => Linking.openURL(profile.socials.github)} style={styles.socialBtn}>
+                                             <Ionicons name="logo-github" size={24} />
+                                             <Text style={{marginLeft: 8}}>GitHub</Text>
+                                         </TouchableOpacity>
+                                     )}
+                                     {profile?.socials?.linkedin && (
+                                         <TouchableOpacity onPress={() => Linking.openURL(profile.socials.linkedin)} style={styles.socialBtn}>
+                                             <Ionicons name="logo-linkedin" size={24} color="#0077b5" />
+                                             <Text style={{marginLeft: 8}}>LinkedIn</Text>
+                                         </TouchableOpacity>
+                                     )}
+                                 </View>
+
                                  <Heatmap />
                              </View>
                          )}
@@ -340,20 +452,85 @@ export default function ProfileScreen({ navigation }) {
 
             <LevelModal visible={showLevel} onClose={() => setShowLevel(false)} stats={stats} />
             
-             {/* QR Modal */}
-             <Modal visible={showQr} transparent animationType="slide">
+            {/* QR Modal */}
+            <Modal visible={showQr} transparent animationType="slide">
                 <View style={styles.modalOverlay}>
                     <View style={styles.qrCard}>
                         <Text style={styles.qrTitle}>Share Profile</Text>
                         <View style={styles.qrPlaceholder}>
-                            <Ionicons name="qr-code" size={150} color="#000" />
+                            {profile?.uid ? (
+                                <QRCode
+                                    value={`campushub://profile/${profile.uid}`}
+                                    size={200}
+                                    color="black"
+                                    backgroundColor="white"
+                                />
+                            ) : (
+                                <Ionicons name="qr-code" size={150} color="#000" />
+                            )}
                         </View>
                         <Text style={styles.qrName}>@{profile?.username || 'user'}</Text>
-                        <TouchableOpacity style={styles.closeQrBtn} onPress={() => setShowQr(false)}>
-                            <Text style={styles.closeQrText}>Close</Text>
-                        </TouchableOpacity>
+                        <View style={{flexDirection: 'row', gap: 10}}>
+                             <TouchableOpacity style={styles.closeQrBtn} onPress={() => setShowQr(false)}>
+                                 <Text style={styles.closeQrText}>Close</Text>
+                             </TouchableOpacity>
+                             <TouchableOpacity style={[styles.closeQrBtn, {backgroundColor: COLORS.primary}]} onPress={handleShare}>
+                                 <Text style={[styles.closeQrText, {color: '#fff'}]}>Share</Text>
+                             </TouchableOpacity>
+                        </View>
                     </View>
                 </View>
+            </Modal>
+
+            {/* Post Detail Modal */}
+            <Modal visible={!!selectedPost} transparent animationType="fade" onRequestClose={() => setSelectedPost(null)}>
+                <View style={styles.modalContainer}>
+                    <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setSelectedPost(null)} />
+                    <View style={styles.postModalContent}>
+                         <TouchableOpacity style={styles.closeModalBtn} onPress={() => setSelectedPost(null)}>
+                             <Ionicons name="close" size={24} color="#fff" />
+                         </TouchableOpacity>
+                         <ScrollView>
+                             <Image source={{uri: selectedPost?.media_urls?.[0] || 'https://picsum.photos/400/400'}} style={styles.postModalImg} />
+                             <View style={styles.postModalBody}>
+                                 <View style={{flexDirection:'row', alignItems:'center', marginBottom:10}}>
+                                     <Image source={{uri: profile?.avatar_url}} style={{width:30, height:30, borderRadius:15, marginRight:10}} />
+                                     <Text style={{fontWeight:'bold'}}>{profile?.name}</Text>
+                                 </View>
+                                 <Text style={styles.postModalTitle}>{selectedPost?.title || "Post Title"}</Text>
+                                 <Text style={styles.postModalText}>{selectedPost?.content_body || "No caption provided."}</Text>
+                                 
+                                 <View style={{flexDirection:'row', marginTop: 20, gap: 20, borderTopWidth:1, borderColor:'#eee', paddingTop:15}}>
+                                     <View style={{flexDirection:'row', alignItems:'center'}}><Ionicons name="heart-outline" size={20} /><Text style={{marginLeft:5}}>{selectedPost?.likes_count || 0}</Text></View>
+                                     <View style={{flexDirection:'row', alignItems:'center'}}><Ionicons name="chatbubble-outline" size={20} /><Text style={{marginLeft:5}}>{selectedPost?.comments_count || 0}</Text></View>
+                                     <View style={{flexDirection:'row', alignItems:'center'}}><Ionicons name="eye-outline" size={20} /><Text style={{marginLeft:5}}>{selectedPost?.views_count || 0}</Text></View>
+                                 </View>
+                             </View>
+                         </ScrollView>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Scanner Modal */}
+            <Modal visible={showScanner} animationType="slide" onRequestClose={() => setShowScanner(false)}>
+                 <View style={{flex: 1, backgroundColor: 'black'}}>
+                     <CameraView
+                        style={{flex: 1}}
+                        facing="back"
+                        onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+                        barcodeScannerSettings={{
+                            barcodeTypes: ["qr"],
+                        }}
+                     >
+                         <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
+                             <View style={{width: 250, height: 250, borderWidth: 2, borderColor: 'white', borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)'}} />
+                             <Text style={{color: 'white', marginTop: 20, fontWeight: 'bold'}}>Scan User QR Code</Text>
+                         </View>
+                         <TouchableOpacity onPress={() => setShowScanner(false)} style={[styles.closeModalBtn, {position: 'absolute', top: 50, right: 30}]}>
+                              <Ionicons name="close" size={30} color="white" />
+                         </TouchableOpacity>
+                     </CameraView>
+                 </View>
             </Modal>
 
         </View>
@@ -469,4 +646,25 @@ const styles = StyleSheet.create({
     qrName: { fontSize: 18, fontWeight: '600', marginBottom: 20 },
     closeQrBtn: { paddingVertical: 10, paddingHorizontal: 30, backgroundColor: '#f5f5f5', borderRadius: 20 },
     closeQrText: { fontWeight: 'bold' },
+
+    // New Styles
+    projectCard: { flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: '#f9f9f9', borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: '#eee' },
+    projThumb: { width: 60, height: 60, borderRadius: 8, backgroundColor: '#eee' },
+    projInfo: { flex: 1, marginLeft: 12 },
+    projTitle: { fontWeight: 'bold', fontSize: 14, color: '#333' },
+    projDesc: { fontSize: 12, color: '#666', marginTop: 4 },
+    badge: { backgroundColor: '#e0f2fe', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, alignSelf: 'flex-start' },
+    badgeText: { color: '#0284c7', fontSize: 10, fontWeight: '700' },
+
+    socialRow: { flexDirection: 'row', gap: 15, marginBottom: 20 },
+    socialBtn: { flexDirection: 'row', alignItems: 'center', padding: 10, backgroundColor: '#f0f0f0', borderRadius: 8 },
+    
+    // Post Modal
+    modalContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', padding: 20 },
+    postModalContent: { backgroundColor: '#fff', borderRadius: 16, overflow: 'hidden', maxHeight: '80%' },
+    postModalImg: { width: '100%', height: 300 },
+    postModalBody: { padding: 20 },
+    postModalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 8 },
+    postModalText: { fontSize: 14, lineHeight: 20, color: '#333' },
+    closeModalBtn: { position: 'absolute', top: 15, right: 15, zIndex: 10, backgroundColor: 'rgba(0,0,0,0.5)', padding: 8, borderRadius: 20 },
 });

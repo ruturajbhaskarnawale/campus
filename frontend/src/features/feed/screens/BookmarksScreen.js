@@ -19,17 +19,11 @@ export default function BookmarksScreen({ navigation }) {
       if (!uid) return;
       const res = await client.get(`/feed/user/${uid}/bookmarks`);
       const list = res.data.data || [];
-      // Each bookmark may contain post_id or full post
-      const posts = await Promise.all(list.map(async (b) => {
-        if (b.post_id) {
-          try {
-            const p = await client.get(`/feed/${b.post_id}`);
-            return p.data || null;
-          } catch (e) { return null; }
-        }
-        return b.post || null;
-      }));
-      setItems(posts.filter(Boolean));
+      
+      // Backend returns { id, post_id, post: {...} }
+      // We extract the post object directly
+      const posts = list.map(b => b.post).filter(Boolean);
+      setItems(posts);
     } catch (e) { console.error('fetch bookmarks', e); }
   };
 

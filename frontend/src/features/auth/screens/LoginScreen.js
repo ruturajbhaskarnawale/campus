@@ -106,6 +106,7 @@ export default function LoginScreen({ navigation }) {
         }
       }
     } catch (error) {
+      console.log("Auth Error Details:", error.response?.data || error.message);
       const message = error.response?.data?.error || error.message || "Authentication failed";
       Alert.alert("Error", message);
     } finally {

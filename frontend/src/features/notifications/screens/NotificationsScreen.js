@@ -235,10 +235,10 @@ export default function NotificationsScreen({ navigation }) {
         <View style={[styles.header, { backgroundColor: colors.background.card, borderBottomColor: colors.border }]}>
           <Text style={[styles.title, { color: colors.text.primary }]}>Notifications</Text>
           <View style={{ flexDirection: 'row', gap: 16 }}>
-            <TouchableOpacity onPress={markAllRead}>
+            <TouchableOpacity onPress={() => markAllRead}>
               <Ionicons name="checkmark-done-circle-outline" size={26} color={colors.primary} />
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => alert('Settings')}>
+            <TouchableOpacity onPress={() => navigation.navigate('Profile', { screen: 'Settings' })}>
               <Ionicons name="settings-outline" size={24} color={colors.primary} />
             </TouchableOpacity>
           </View>
@@ -276,7 +276,7 @@ export default function NotificationsScreen({ navigation }) {
           stickySectionHeadersEnabled={false}
           ListFooterComponent={
             <View style={styles.footer}>
-              <TouchableOpacity onPress={() => alert('Manage Push Settings')}>
+              <TouchableOpacity onPress={() => navigation.navigate('Profile', { screen: 'Settings' })}>
                 <Text style={[styles.footerLink, { color: colors.primary }]}>Manage settings</Text>
               </TouchableOpacity>
               <Text style={[styles.footerText, { color: colors.text.tertiary }]}>That's all for now!</Text>

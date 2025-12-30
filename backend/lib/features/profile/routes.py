@@ -15,15 +15,31 @@ def get_enhanced_profile(user_id):
         if not user:
              return jsonify({"error": "User not found"}), 404
              
-        # 1. Stats
+        # 1. Stats & Dynamic Counts
         proj_count = session.query(Project).filter(Project.owner_id == user.id).count() or 0
         post_count = session.query(Post).filter(Post.author_id == user.id).count() or 0
+        followers_real = session.query(Follow).filter(Follow.followed_id == user.id).count()
+        following_real = session.query(Follow).filter(Follow.follower_id == user.id).count()
         
-        # Likes calc (rough, can be optimized later or add User.total_likes_received)
+        # Likes calc
         total_likes = 0
         user_posts = session.query(Post).filter(Post.author_id == user.id).all()
         for p in user_posts:
             total_likes += (p.likes_count or 0)
+
+        # Fetch Projects
+        projects_db = session.query(Project).filter(Project.owner_id == user.id).all()
+        projects_list = []
+        for p in projects_db:
+             projects_list.append({
+                 'id': p.id,
+                 'title': p.post.title if p.post else "Project", # fallback title
+                 'desc': p.post.content_body if p.post else "No description", 
+                 'status': p.status,
+                 'image': p.post.media_urls_json[0] if (p.post and p.post.media_urls_json) else None,
+                 'demo_url': p.demo_url,
+                 'repo_url': p.repository_url
+             })
 
         # 2. XP Logic
         calculated_xp = 100 + (proj_count * 50) + (post_count * 10) + (total_likes * 5)
@@ -35,8 +51,8 @@ def get_enhanced_profile(user_id):
             'views': user.views_count if hasattr(user, 'views_count') else 0, 
             'collaborations': proj_count,
             'likes': total_likes,
-            'followers': user.followers_count or 0,
-            'following': user.following_count or 0,
+            'followers': followers_real,
+            'following': following_real,
             'reputation': int(current_xp / 10)
         }
         
@@ -63,7 +79,8 @@ def get_enhanced_profile(user_id):
             'stats': stats,
             'badges': badges,
             'socials': socials,
-            'skills': [s.name for s in user.skills]
+            'skills': [s.name for s in user.skills],
+            'projects': projects_list
         }
         
         return jsonify(enhanced_data), 200

@@ -72,14 +72,34 @@ class User(Base):
     # Social Stats
     followers_count = Column(Integer, default=0)
     following_count = Column(Integer, default=0)
+    views_count = Column(Integer, default=0)     # Profile views
+    impressions_count = Column(Integer, default=0) # Post impressions aggregate
+
+    daily_insights = relationship("DailyInsight", back_populates="user")
+    
+    posts = relationship("Post", back_populates="author")
+    skills = relationship("Skill", secondary=user_skills, back_populates="users")
+    conversations = relationship("Conversation", secondary=conversation_participants, back_populates="participants")
+    
+class DailyInsight(Base):
+    __tablename__ = 'daily_insights'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'))
+    date = Column(DateTime, default=datetime.utcnow)
+    
+    views = Column(Integer, default=0)
+    impressions = Column(Integer, default=0)
+    new_follows = Column(Integer, default=0)
+    
+    user = relationship("User", back_populates="daily_insights")
     
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    
     # Relationships
-    posts = relationship("Post", back_populates="author")
-    skills = relationship("Skill", secondary=user_skills, back_populates="users")
-    conversations = relationship("Conversation", secondary=conversation_participants, back_populates="participants")
+    # (None extra needed beyond user)
 
 class Post(Base):
     __tablename__ = 'posts'
