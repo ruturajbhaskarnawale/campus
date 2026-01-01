@@ -8,3 +8,5 @@ SQLAlchemy
 psycopg2-binary
 bcrypt
 PyJWT
+textblob
+nltk
