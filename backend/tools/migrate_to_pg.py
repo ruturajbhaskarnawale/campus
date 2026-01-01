@@ -18,7 +18,8 @@ SQLITE_URL = f"sqlite:///{SQLITE_DB_PATH}"
 # Parse the provided Postgres URL to handle special characters in password
 # User provided: postgresql://postgres:Lucky@2005@localhost:5432/campus_hub
 # We need to encode 'Lucky@2005' -> 'Lucky%402005'
-RAW_PG_URL = "postgresql://postgres:Lucky@2005@localhost:5432/campus_hub"
+# RAW_PG_URL = "postgresql://postgres:Lucky@2005@localhost:5432/campus_hub"
+RAW_PG_URL = "postgresql://neondb_owner:npg_0tfaAlPgM6QI@ep-shiny-shape-a4rjm3jm.us-east-1.aws.neon.tech/neondb?sslmode=require"
 
 def get_safe_pg_url(raw_url):
     try:
