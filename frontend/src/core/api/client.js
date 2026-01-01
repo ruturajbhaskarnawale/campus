@@ -1,8 +1,8 @@
 import axios from 'axios';
-import { API_BASE } from './config';
+
 
 const client = axios.create({
-  baseURL: API_BASE,
+  baseURL: 'https://campus-backend-six.vercel.app/api',
   headers: {
     'Content-Type': 'application/json',
   },
