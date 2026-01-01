@@ -1,11 +1,12 @@
-flask
-flask-cors
-firebase-admin
-python-dotenv
-requests
+Flask
 Flask-SQLAlchemy
 SQLAlchemy
 psycopg2-binary
 bcrypt
 PyJWT
+textblob
 nltk
+requests
+python-dotenv
+flask-cors
+firebase-admin
