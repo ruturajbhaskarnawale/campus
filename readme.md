@@ -2,6 +2,11 @@
 
 **Campus Project Hub** is a premium cross-platform mobile social network designed exclusively for students to find teammates for academic projects and hackathons.
 
+> **🟢 LIVE DEMO**  
+> **Frontend:** [https://campus-frontend-six.vercel.app](https://campus-frontend-six.vercel.app)  
+> **Backend API:** [https://campus-backend-six.vercel.app](https://campus-backend-six.vercel.app)  
+> *Check out the [Cloud Deployment Report](Documentation/Cloud_Deployment_Report.md) for architecture details.*
+
 Unlike generic social media, this platform features **Smart Skill Matching** to connect users based on technical expertise and utilizes **AI-Powered Sentiment Analysis** to ensure a positive, toxic-free community.
 
 ---
@@ -11,26 +16,28 @@ Unlike generic social media, this platform features **Smart Skill Matching** to 
 * **🔐 Student-Only Authentication:** Restricted access using university email verification (.edu) to ensure a verified student user base.
 * **🧠 Smart Skill Matching (USP):** Users can filter the project feed to find opportunities that match their specific skills (e.g., "Python", "Unity", "React").
 * **🛡️ AI Content Moderator (Innovation):** Integrated Machine Learning (NLP) engine that analyzes post content in real-time and automatically blocks toxic or bullying language before it is published.
-* **� Unified Search & Advanced Filters:** Powerful search engine to find People, Projects, and Posts with granular filters for skills, department, and university year.
+* **🔍 Unified Search & Advanced Filters:** Powerful search engine to find People, Projects, and Posts with granular filters for skills, department, and university year.
 * **📈 Activity Heatmap:** GitHub-style contribution tracking on user profiles to showcase consistency and dedication.
-* **�📱 Cross-Platform UI:** Built with React Native to run smoothly on both iOS and Android, featuring a premium glassmorphism design system.
+* **📱 Cross-Platform UI:** Built with React Native to run smoothly on both iOS and Android, featuring a premium glassmorphism design system.
 * **📅 Scheduling System:** Plan and schedule project announcements for optimal visibility.
-* **� Smart Notifications:** Real-time system for tracking new followers, likes, project applications, and system alerts.
+* **🔔 Smart Notifications:** Real-time system for tracking new followers, likes, project applications, and system alerts.
 * **💬 Real-Time Messaging:** Instant collaboration with team members.
 
 ---
 
-## 🛠️ Tech Stack
+## 🛠️ Deployment Tech Stack
 
-* **Frontend:** React Native (Expo)
-* **Backend:** Python (Flask)
-* **Database:** Google Firebase (Firestore & Authentication)
-* **AI/ML:** TextBlob (Natural Language Processing)
-* **API Testing:** Thunder Client
+We have shifted from a local monolith to a **Distributed Serverless Cloud Architecture**:
+
+* **Frontend Hosting:** Vercel (React Native Web / Single Page App)
+* **Backend Runtime:** Vercel Serverless Functions (Python Flask)
+* **Database:** Vercel Postgres (Neon Cloud Managed PostgreSQL)
+* **ML Engine:** TextBlob with On-Demand NLTK Data Loading
+* **API Security:** JWT + CORS (Cross-Origin Resource Sharing)
 
 ---
 
-## 🚀 How to Run the Project
+## 🚀 How to Run Locally (Development Mode)
 
 ### Prerequisites
 * Node.js & npm installed
@@ -47,18 +54,13 @@ cd backend
 python -m venv venv
 
 # Activate it
-venv\Scripts\activate
 # Windows:
-
+venv\Scripts\activate
 # Mac/Linux:
-
 source venv/bin/activate
 
 # Install dependencies
-pip install -r requirements.txtw
-
-# Download ML Data
-python -m textblob.download_corpora
+pip install -r requirements.txt
 
 # Run the Server
 python app.py
